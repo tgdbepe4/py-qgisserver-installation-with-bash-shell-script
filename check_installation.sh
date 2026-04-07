@@ -35,6 +35,7 @@ PYQGIS_CONF="/srv/qgis/server.conf"
 PYQGIS_ENV="/srv/qgis/config/qgis-service.env"
 NGINX_CONF="/etc/nginx/sites-enabled/lizmap"
 NGINX_AVAILABLE="/etc/nginx/sites-available/lizmap"
+NGINX_COMMON="/etc/nginx/lizmap-common.conf"
 PHP_VERSION="8.3"
 PG_DB="lizmap"
 PG_USER="lizmap"
@@ -347,8 +348,15 @@ else
     OK "Nginx: default-Vhost deaktiviert ✓"
 fi
 
-# root-Direktive (Kommentarzeilen überspringen)
-NGINX_ROOT=$(grep -h "^\s*root " "${NGINX_CONF}" 2>/dev/null \
+# lizmap-common.conf (shared location blocks)
+if [ -f "${NGINX_COMMON}" ]; then
+    OK "Nginx: lizmap-common.conf vorhanden"
+else
+    warn "Nginx: ${NGINX_COMMON} fehlt — gemeinsame Location-Blöcke nicht gefunden"
+fi
+
+# root-Direktive — steht in lizmap-common.conf (bevorzugt) oder direkt im vhost
+NGINX_ROOT=$(grep -h "^\s*root " "${NGINX_COMMON}" "${NGINX_CONF}" 2>/dev/null \
              | grep -v "^\s*#" | head -1 | awk '{print $2}' | tr -d ';')
 if [ -n "${NGINX_ROOT}" ]; then
     if [ -f "${NGINX_ROOT}/index.php" ]; then
@@ -357,32 +365,34 @@ if [ -n "${NGINX_ROOT}" ]; then
         fail "Nginx root: ${NGINX_ROOT} — index.php fehlt"
         INFO "  → Korrekt: root ${LIZMAP_WEBROOT};"
         if $FIX_MODE; then
-            FIX "Korrigiere Nginx root ..."
-            sed -i "s|^\s*root .*;|    root ${LIZMAP_WEBROOT};|" "${NGINX_AVAILABLE}"
+            FIX "Korrigiere Nginx root in lizmap-common.conf ..."
+            sed -i "s|^\s*root .*;|    root ${LIZMAP_WEBROOT};|" "${NGINX_COMMON}"
             nginx -t && systemctl restart nginx
         fi
     fi
 else
-    warn "Nginx root-Direktive nicht gefunden in ${NGINX_CONF}"
+    warn "Nginx root-Direktive nicht gefunden (weder in ${NGINX_COMMON} noch ${NGINX_CONF})"
 fi
 
-# server_name prüfen
-NGINX_SERVER_NAME=$(grep -h "^\s*server_name " "${NGINX_CONF}" 2>/dev/null \
-    | grep -v "^\s*#" | head -1 | sed 's/.*server_name[[:space:]]*//;s/;//')
-if echo "${NGINX_SERVER_NAME}" | grep -qw "localhost"; then
-    OK "Nginx: server_name enthält 'localhost'"
+# server_name — über alle server_name-Zeilen im vhost prüfen (zwei Blöcke)
+ALL_SERVER_NAMES=$(grep -h "^\s*server_name " "${NGINX_CONF}" 2>/dev/null \
+    | grep -v "^\s*#" | sed 's/.*server_name[[:space:]]*//;s/;//' | tr '\n' ' ')
+# default_server Block hat server_name _ — das ist korrekt für IP-Zugriff
+if grep -q "server_name\s*_" "${NGINX_CONF}" 2>/dev/null; then
+    OK "Nginx: Block 1 (default_server) mit server_name _ vorhanden → IP-Zugriff direkt"
 else
-    warn "Nginx: server_name enthält 'localhost' nicht (aktuell: '${NGINX_SERVER_NAME}')"
+    warn "Nginx: kein default_server-Block mit server_name _ gefunden"
+    INFO "  → IP-Zugriff funktioniert möglicherweise nicht direkt"
 fi
-if echo "${NGINX_SERVER_NAME}" | grep -qw "karte1.wandelderzeit.ch"; then
-    OK "Nginx: server_name enthält 'karte1.wandelderzeit.ch'"
+if echo "${ALL_SERVER_NAMES}" | grep -qw "karte1.wandelderzeit.ch"; then
+    OK "Nginx: Block 2 enthält server_name 'karte1.wandelderzeit.ch'"
 else
-    warn "Nginx: server_name enthält 'karte1.wandelderzeit.ch' nicht (aktuell: '${NGINX_SERVER_NAME}')"
-    INFO "  → server_name in ${NGINX_AVAILABLE} auf 'localhost karte1.wandelderzeit.ch' setzen"
+    warn "Nginx: 'karte1.wandelderzeit.ch' nicht in server_name gefunden (aktuell: '${ALL_SERVER_NAMES}')"
+    INFO "  → server_name in Block 2 von ${NGINX_AVAILABLE} setzen"
 fi
 
 # Proxy zu py-qgis-server auf Port 7200
-if grep -q "proxy_pass.*${PYQGIS_PORT}" "${NGINX_CONF}" 2>/dev/null; then
+if grep -qh "proxy_pass.*${PYQGIS_PORT}" "${NGINX_COMMON}" "${NGINX_CONF}" 2>/dev/null; then
     OK "Nginx: proxy_pass → http://127.0.0.1:${PYQGIS_PORT}"
 else
     fail "Nginx: kein proxy_pass auf Port ${PYQGIS_PORT} gefunden"

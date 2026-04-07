@@ -84,10 +84,23 @@ CERTBOT_EMAIL=""              # E-Mail für Let's Encrypt; leer = HTTPS überspr
 ### Nginx
 
 - Konfiguration: `/etc/nginx/sites-available/lizmap`
+- Gemeinsame Location-Blöcke: `/etc/nginx/lizmap-common.conf`
 - Web Root: `/var/www/lizmap/lizmap/www`
-- Akzeptierte Hostnamen (`server_name`): `localhost karte1.wandelderzeit.ch`
 - Proxy: `/ows/` → `http://127.0.0.1:7200/ows/`
 - Logs: `/var/log/nginx/lizmap-access.log`, `/var/log/nginx/lizmap-error.log`
+
+**Zwei Server-Blöcke:**
+
+| Block | `listen` | `server_name` | Zweck |
+|---|---|---|---|
+| Block 1 | `80 default_server` | `_` | IP-Zugriff — immer Lizmap direkt, certbot-unabhängig |
+| Block 2 | `80` | `karte1.wandelderzeit.ch localhost` | Domain — certbot setzt hier HTTPS auf |
+
+| Zugriff | Vor HTTPS | Nach HTTPS |
+|---|---|---|
+| `http://<IP>/` | Lizmap direkt | Lizmap direkt |
+| `http://karte1.wandelderzeit.ch/` | Lizmap direkt | 301 → `https://...` |
+| `https://karte1.wandelderzeit.ch/` | — | Lizmap direkt |
 
 ### py-qgis-server — `/srv/qgis/server.conf`
 
@@ -217,8 +230,8 @@ vollautomatisch am Ende der Installation:
 
 1. Erste Nicht-localhost-Domain aus `SERVER_NAME` wird als Zieldomain verwendet
 2. `certbot --nginx -d <domain> --non-interactive --agree-tos` wird aufgerufen
-3. Certbots `return 404`-Block im HTTP-Vhost wird sofort durch eine `301`-Weiterleitung
-   auf die HTTPS-Domain ersetzt → `http://<IP>` funktioniert weiterhin
+3. Certbot modifiziert nur **Block 2** (Domain) — **Block 1** (IP/default_server) bleibt
+   unberührt → `http://<IP>/` funktioniert weiterhin direkt, kein Fix nötig
 
 ### Manuell (nachträglich)
 
@@ -228,14 +241,8 @@ certbot und das nginx-Plugin sind bereits installiert:
 certbot --nginx -d karte1.wandelderzeit.ch
 ```
 
-**Nach certbot:** Certbot setzt im HTTP-Block `return 404` für alle Nicht-Domain-Anfragen.
-Damit `http://<IP>` auf die HTTPS-Domain weiterleitet statt 404 zurückzugeben:
-
-```bash
-sed -i 's|return 404;.*Certbot|return 301 https://karte1.wandelderzeit.ch$request_uri;|' \
-    /etc/nginx/sites-available/lizmap
-nginx -t && systemctl reload nginx
-```
+Da Block 1 (`default_server`) von certbot nicht angefasst wird, ist kein zusätzlicher
+Fix für den IP-Zugriff nötig. `http://<IP>/` bleibt nach certbot weiterhin erreichbar.
 
 ---
 
