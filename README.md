@@ -48,6 +48,19 @@ Bei localhost (localhost:3386) muss man einen anderen Port verwenden, damit man 
 
 Im File /srv/qgis/config/preload_projects.txt kann man QGIS projekte aufnehmen, die beim Starten des Systems oder mit "service qgis reload" in den Cache geladen werden. Jedoch nur wie sich das Projekt beim Starten zeigt. So wird das QGIS Projekt ganz schnell im Browser sichtbar.
 
+## Testinstallation mit Hyper-V
+Hat man einen Window11 PC zur Verfügung so kann man mit keinen Aufwand dieses Script ausprobieren:
+1. Ubuntu 24.04 Server ISO-Image herunterladen
+2. Hyper-V wenn nicht bereits gemacht bei Windows Features aktivieren
+3. Hyper-V PC neu installieren, RAM und Prozessoren nach Wunsch wählen und Netzwerk als "extern" wählen. Unter Manager für virtuelle Switches zuerst aktiviern!
+4. ISO Ubuntu 24.04 Image einbinden.
+5. Starten
+6. Installieren!
+7. Etwas später sollte man eine Ubuntu 24.04 Clean Installation haben.
+8. Nun muss man das Installationsscript, install_lizmap_qgisserver.sh und das check_installation.sh auf dem Ubunutu zur Verfügung haben. Fall diese auf dem Windows PC verfügbar ist kann man nach Freigabe den bestimmten Ordner als SMB Ordner im Ubuntu mounten. Dazu im Ubuntu mindesten "apt install samba" installieren. Das Weitere dazu finden man im Internet.
+9. Falls man die Scripte zur Verfügung hat dann wie anderswo auch beschrieben, "bash install_lizmap_qgisserver.sh" und danach "bash check_installation.sh" ausführen.
+10. Ist dies erfolgreich so hat man nun alles wie beschrieben zur Verfügung und kann mit putty und falls gewünscht mit Remote Desktop auf das System zugreifen.
+   
 Vollautomatische Installation und Diagnose eines **Lizmap Web Client + py-qgis-server**-Stacks auf **Ubuntu 24.04 LTS**.
 
 ## Skripte
