@@ -1,5 +1,29 @@
 # Lizmap + py-qgis-server — Projektdokumentation
 
+## Vorwort
+
+Dieses Projekt richtet sich an alle, die einen **GIS-Webserver auf eigener Infrastruktur**
+betreiben möchten — ohne tiefgreifende Linux- oder GIS-Serverkenntnisse vorauszusetzen.
+
+Ziel ist es, den gesamten Stack aus **QGIS Server**, **Lizmap Web Client** und allen
+notwendigen Diensten (Nginx, PHP, PostgreSQL, xRDP) mit einem einzigen Skript vollständig
+und reproduzierbar auf einem frischen **Ubuntu 24.04 LTS**-Server aufzusetzen.
+
+**Typische Anwendungsfälle:**
+- Gemeinden, Planungsbüros oder Organisationen, die QGIS-Projekte im Browser veröffentlichen wollen
+- Systemadministratoren, die einen produktionsreifen GIS-Server aufsetzen oder warten
+- Entwickler und GIS-Fachleute, die eine reproduzierbare Testumgebung benötigen
+
+**Was dieses Projekt liefert:**
+- Vollautomatische Installation per Shell-Skript — ein Befehl, fertig aufgesetzter Server
+- Diagnoseskript zur Fehlersuche und optionalen automatischen Korrektur
+- Backup-Skript für alle Konfigurationen und Daten
+- Vollständige Dokumentation aller Komponenten, Pfade und Konfigurationsoptionen
+
+Vorkenntnisse: grundlegende Linux-Kenntnisse (SSH, Texteditor) genügen.
+
+---
+
 ## Übersicht
 
 Dieses Repository enthält Skripte zur vollautomatischen Installation und Diagnose
