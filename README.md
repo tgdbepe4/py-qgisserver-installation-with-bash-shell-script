@@ -2,9 +2,18 @@
 
 Das Projekt hat es zum Ziel eine komplette Lizmap-Umgebung auf einem Ubuntu 24.04 mit dem py-qgisserver zu installieren. Ausserdem postgres, das Hilfswerkzeug qgis-plugin-manager und eine Xfece4 Desktop-Umgebung.
 
+Diese Scripts wurden mit der KI claude.ai, der günstigsten Proversion für kapp € 20.- erstellt. Es brauchte unzählige Interaktionen bis alles sauber lief. Nun ist jedoch das Resultat überzeugend!
+
 Im install_lizmap_qgisserver.sh muss man das URL anpassen von karte1.wandelderzeit.ch auf das gewünschte URL. Erst danach das Script ausführen.
 
-Weiter muss nach der Installation certbot --nginx -d <URL> ausgeführt werden. Damit werden in der NGIX-Umgebung die Zertifikate generiert und installiert.
+Weiter muss nach der Installation "certbot --nginx -d <URL>" ausgeführt werden. Damit werden in der NGIX-Umgebung die Zertifikate generiert und installiert.
+
+Falls man ein System auserhalb, z.B. eine Cloudlösung verwendet, empfehle ich putty und damit einen Tunnel zum Remote Desktop Server konfigurieren. Putty kann man via ein Script starten. Beispiel unter Windows 11 ein Batchfile erstellen mit der Erweiterung *.bat :
+
+cd "C:\Program Files\PuTTY\"
+start putty.exe -load "root@<ip adresse des server>" root@<ip adresse des server> -P 22 -pw <passwort> -L localhost:3386:<ip adresse des server>:3389
+
+Bei localhost (localhost:3386) muss man einen anderen Port verwenden, damit man nicht in Konflikt mit dem lokalen RDP-Server kommt! 
 
 Vollautomatische Installation und Diagnose eines **Lizmap Web Client + py-qgis-server**-Stacks auf **Ubuntu 24.04 LTS**.
 
