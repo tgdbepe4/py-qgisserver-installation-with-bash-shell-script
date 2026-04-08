@@ -228,6 +228,14 @@ python3 -m venv /opt/local/py-qgis-server --system-site-packages
 /opt/local/py-qgis-server/bin/pip install -q -U pip setuptools wheel pysocks typing_extensions
 /opt/local/py-qgis-server/bin/pip install -q py-qgis-server
 
+# qgis-plugin-manager: in dieselbe venv installieren, solange sie frisch und
+# konsistent ist. Ubuntu 24.04 verbietet pip3 system-weit (PEP 668).
+if /opt/local/py-qgis-server/bin/pip install -q qgis-plugin-manager; then
+    log "qgis-plugin-manager installiert."
+else
+    warn "qgis-plugin-manager: pip install fehlgeschlagen — Plugin-Installation läuft via ZIP-Fallback."
+fi
+
 # Symlink so "qgisserver" is available system-wide (used by supervisor command)
 ln -sf /opt/local/py-qgis-server/bin/qgisserver /usr/local/bin/qgisserver 2>/dev/null || true
 
@@ -452,14 +460,13 @@ section "5c. QGIS Server plugins (atlasprint, lizmap_server, wfsOutputExtension)
 # Installation in die py-qgis-server venv (vermeidet "externally-managed-environment" auf Ubuntu 24.04)
 PYQGIS_VENV="/opt/local/py-qgis-server"
 PLUGIN_MGR_BIN=""
-if "${PYQGIS_VENV}/bin/pip" install -q qgis-plugin-manager 2>/dev/null \
-   && [ -x "${PYQGIS_VENV}/bin/qgis-plugin-manager" ]; then
+# qgis-plugin-manager wurde bereits in Sektion 5 in die venv installiert.
+# Hier nur prüfen ob das Binary vorhanden ist.
+if [ -x "${PYQGIS_VENV}/bin/qgis-plugin-manager" ]; then
     PLUGIN_MGR_BIN="${PYQGIS_VENV}/bin/qgis-plugin-manager"
-    log "qgis-plugin-manager in venv installiert (${PYQGIS_VENV})."
+    log "qgis-plugin-manager verfügbar: ${PLUGIN_MGR_BIN}"
 else
-    # Fallback: system-weit mit --break-system-packages (Ubuntu 24.04)
-    pip3 install -q --break-system-packages qgis-plugin-manager 2>/dev/null || true
-    command -v qgis-plugin-manager &>/dev/null && PLUGIN_MGR_BIN="qgis-plugin-manager"
+    warn "qgis-plugin-manager Binary nicht gefunden — Plugin-Installation läuft via ZIP-Fallback."
 fi
 
 if [ -n "${PLUGIN_MGR_BIN}" ]; then
