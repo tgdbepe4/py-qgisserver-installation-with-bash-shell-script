@@ -6,27 +6,28 @@ Diese Scripts wurden mit der KI claude.ai, der günstigsten Pro Version für kap
 
 Im install_lizmap_qgisserver.sh muss man das URL anpassen von karte1.wandelderzeit.ch auf das gewünschte URL. 
 
-# ---- CONFIGURABLE VARIABLES -------------------------------------------------
-LIZMAP_VERSION="3.9.7"
-LIZMAP_DIR="/var/www/lizmap"
-QGIS_PROJECTS_DIR="/srv/data"
-QGIS_WORKER_COUNT=4          # Number of QGIS Server worker instances
-SERVER_NAME="localhost karte1.wandelderzeit.ch"  # Change to your domain or IP
-LIZMAP_USER="www-data"
-LIZMAP_GROUP="www-data"
-INSTALL_POSTGRESQL=true       # Set to false to skip PostgreSQL
-PG_LIZMAP_DB="lizmap"
-PG_LIZMAP_USER="lizmap"
-PG_LIZMAP_PASS="${PG_LIZMAP_PASS:-lizmap_secret_$(openssl rand -hex 6)}"
-INSTALL_XRDP=true             # Set to false to skip xRDP + XFCE4
-XRDP_USER="gisadmin"          # Dedicated RDP user (created if missing)
-XRDP_PASS="${XRDP_PASS:-GisAdmin_$(openssl rand -hex 4)}"  # Auto-generated, shown at end
-XRDP_PORT=3389
-INSTALL_SECURITY=true         # Set to false to skip UFW + Fail2ban hardening
-CERTBOT_EMAIL=""              # Set to your email to enable automatic HTTPS via Let's Encrypt
-                              # Leave empty to skip certbot (configure manually later)
-LOG_FILE="/var/log/install_lizmap_qgisserver.log"
-# -----------------------------------------------------------------------------
+### Anpassbare Variablen (Skript-Header)
+
+| Variable | Standardwert | Beschreibung |
+|---|---|---|
+| `LIZMAP_VERSION` | `3.9.7` | Lizmap Web Client Version |
+| `LIZMAP_DIR` | `/var/www/lizmap` | Installationspfad Lizmap |
+| `QGIS_PROJECTS_DIR` | `/srv/data` | Verzeichnis für QGIS-Projektdateien |
+| `QGIS_WORKER_COUNT` | `4` | Anzahl QGIS Server Worker-Instanzen |
+| `SERVER_NAME` | `localhost karte1.wandelderzeit.ch` | Domain oder IP des Servers |
+| `LIZMAP_USER` | `www-data` | Webserver-Benutzer (PHP-FPM / Nginx) |
+| `LIZMAP_GROUP` | `www-data` | Webserver-Gruppe |
+| `INSTALL_POSTGRESQL` | `true` | PostgreSQL + PostGIS installieren (`true`/`false`) |
+| `PG_LIZMAP_DB` | `lizmap` | PostgreSQL Datenbankname |
+| `PG_LIZMAP_USER` | `lizmap` | PostgreSQL Benutzername |
+| `PG_LIZMAP_PASS` | *(auto-generiert)* | PostgreSQL Passwort — stabil bei Re-Run wenn als Env-Variable exportiert |
+| `INSTALL_XRDP` | `true` | xRDP + XFCE4 installieren (`true`/`false`) |
+| `XRDP_USER` | `gisadmin` | Dedizierter RDP-Benutzer |
+| `XRDP_PASS` | *(auto-generiert)* | RDP-Passwort — stabil bei Re-Run wenn als Env-Variable exportiert |
+| `XRDP_PORT` | `3389` | RDP-Port |
+| `INSTALL_SECURITY` | `true` | UFW + Fail2ban installieren (`true`/`false`) |
+| `CERTBOT_EMAIL` | *(leer)* | E-Mail für Let's Encrypt — leer = HTTPS überspringen |
+| `LOG_FILE` | `/var/log/install_lizmap_qgisserver.log` | Pfad zur Installationslogdatei |
 
 Ausserdem sollte die Anzahl Worker dort angepasst werden.
 
