@@ -1,5 +1,11 @@
 # Lizmap Web Client + py-qgis-server — Installation Stack
 
+Das Projekt hat es zum Ziel eine komplette Lizmap-Umgebung auf einem Ubuntu 24.04 mit dem py-qgisserver zu installieren. Ausserdem postgres, das Hilfswerkzeug qgis-plugin-manager und eine Xfece4 Desktop-Umgebung.
+
+Im install_lizmap_qgisserver.sh muss man das URL anpassen von karte1.wandelderzeit.ch auf das gewünschte URL. Erst danach das Script ausführen.
+
+Weiter muss nach der Installation certbot --nginx -d <URL> ausgeführt werden. Damit werden in der NGIX-Umgebung die Zertifikate generiert und installiert.
+
 Vollautomatische Installation und Diagnose eines **Lizmap Web Client + py-qgis-server**-Stacks auf **Ubuntu 24.04 LTS**.
 
 ## Skripte
