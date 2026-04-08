@@ -748,6 +748,105 @@ else
 fi
 
 # =============================================================================
+section "9b. qgis-plugin-manager"
+# =============================================================================
+
+PYQGIS_VENV="/opt/local/py-qgis-server"
+PLUGIN_MGR_BIN="${PYQGIS_VENV}/bin/qgis-plugin-manager"
+SOURCES_LIST="${PLUGIN_DIR}/sources.list"
+
+# Binary vorhanden?
+if [ -x "${PLUGIN_MGR_BIN}" ]; then
+    PLUGIN_MGR_VER=$("${PLUGIN_MGR_BIN}" --version 2>/dev/null | grep -oP '[\d.]+' | head -1)
+    OK "qgis-plugin-manager installiert${PLUGIN_MGR_VER:+ (v${PLUGIN_MGR_VER})}"
+else
+    fail "qgis-plugin-manager nicht gefunden: ${PLUGIN_MGR_BIN}"
+    INFO "  → ${PYQGIS_VENV}/bin/pip install qgis-plugin-manager"
+    if $FIX_MODE; then
+        FIX "Installiere qgis-plugin-manager in venv ..."
+        "${PYQGIS_VENV}/bin/pip" install -q qgis-plugin-manager \
+            && OK "qgis-plugin-manager installiert" \
+            || warn "Installation fehlgeschlagen"
+    fi
+fi
+
+# sources.list vorhanden und korrekt?
+if [ -f "${SOURCES_LIST}" ]; then
+    SOURCES_CONTENT=$(grep -v '^\s*#' "${SOURCES_LIST}" | grep -v '^\s*$' | head -1)
+    if echo "${SOURCES_CONTENT}" | grep -q "plugins.qgis.org.*qgis="; then
+        QGIS_VER_IN_URL=$(echo "${SOURCES_CONTENT}" | grep -oP 'qgis=\K[\d.]+')
+        OK "sources.list: ${SOURCES_CONTENT} (QGIS ${QGIS_VER_IN_URL})"
+    elif [ -z "${SOURCES_CONTENT}" ]; then
+        fail "sources.list ist leer oder enthält nur Kommentare"
+        INFO "  → QGIS-Version ermitteln und sources.list neu schreiben:"
+        INFO "    QGIS_VER=\$(dpkg -l qgis-server | awk '/^ii.*qgis-server /{print \$3}' | grep -oP '\\d+\\.\\d+' | head -1)"
+        INFO "    echo \"https://plugins.qgis.org/plugins/plugins.xml?qgis=\${QGIS_VER}\" > ${SOURCES_LIST}"
+        if $FIX_MODE; then
+            FIX "Schreibe sources.list neu ..."
+            QGIS_VER=$(dpkg -l qgis-server 2>/dev/null \
+                | awk '/^ii.*qgis-server /{print $3}' \
+                | grep -oP '\d+\.\d+' | head -1)
+            if [ -n "${QGIS_VER}" ]; then
+                echo "https://plugins.qgis.org/plugins/plugins.xml?qgis=${QGIS_VER}" \
+                    > "${SOURCES_LIST}"
+                OK "sources.list geschrieben (QGIS ${QGIS_VER})"
+            else
+                warn "QGIS-Version konnte nicht ermittelt werden — sources.list nicht aktualisiert"
+            fi
+        fi
+    else
+        warn "sources.list vorhanden aber URL enthält keine QGIS-Version (?qgis=X.Y)"
+        INFO "  Aktueller Inhalt: ${SOURCES_CONTENT}"
+        INFO "  → QGIS_VER=\$(dpkg -l qgis-server | awk '/^ii.*qgis-server /{print \$3}' | grep -oP '\\d+\\.\\d+' | head -1)"
+        INFO "    echo \"https://plugins.qgis.org/plugins/plugins.xml?qgis=\${QGIS_VER}\" > ${SOURCES_LIST}"
+        if $FIX_MODE; then
+            FIX "Korrigiere sources.list ..."
+            QGIS_VER=$(dpkg -l qgis-server 2>/dev/null \
+                | awk '/^ii.*qgis-server /{print $3}' \
+                | grep -oP '\d+\.\d+' | head -1)
+            if [ -n "${QGIS_VER}" ]; then
+                echo "https://plugins.qgis.org/plugins/plugins.xml?qgis=${QGIS_VER}" \
+                    > "${SOURCES_LIST}"
+                OK "sources.list korrigiert (QGIS ${QGIS_VER})"
+            else
+                warn "QGIS-Version konnte nicht ermittelt werden"
+            fi
+        fi
+    fi
+else
+    fail "sources.list fehlt: ${SOURCES_LIST}"
+    INFO "  → QGIS_VER=\$(dpkg -l qgis-server | awk '/^ii.*qgis-server /{print \$3}' | grep -oP '\\d+\\.\\d+' | head -1)"
+    INFO "    echo \"https://plugins.qgis.org/plugins/plugins.xml?qgis=\${QGIS_VER}\" > ${SOURCES_LIST}"
+    if $FIX_MODE; then
+        FIX "Erstelle sources.list ..."
+        QGIS_VER=$(dpkg -l qgis-server 2>/dev/null \
+            | awk '/^ii.*qgis-server /{print $3}' \
+            | grep -oP '\d+\.\d+' | head -1)
+        if [ -n "${QGIS_VER}" ]; then
+            echo "https://plugins.qgis.org/plugins/plugins.xml?qgis=${QGIS_VER}" \
+                > "${SOURCES_LIST}"
+            chown qgis:qgis "${SOURCES_LIST}"
+            OK "sources.list erstellt (QGIS ${QGIS_VER})"
+        else
+            warn "QGIS-Version konnte nicht ermittelt werden"
+        fi
+    fi
+fi
+
+# Plugin-Versionen via qgis-plugin-manager list (nur wenn Binary vorhanden)
+if [ -x "${PLUGIN_MGR_BIN}" ]; then
+    PLUGIN_LIST=$(QGIS_PLUGINPATH="${PLUGIN_DIR}" \
+        "${PLUGIN_MGR_BIN}" list 2>/dev/null | grep -E "atlasprint|lizmap_server|wfsOutputExtension")
+    if [ -n "${PLUGIN_LIST}" ]; then
+        OK "qgis-plugin-manager list:"
+        echo "${PLUGIN_LIST}" | sed 's/^/         /'
+    else
+        INFO "qgis-plugin-manager list: keine Ausgabe (Plugins noch nicht indiziert oder sources.list fehlt)"
+        INFO "  → ${PLUGIN_MGR_BIN} update"
+    fi
+fi
+
+# =============================================================================
 section "10. xRDP"
 # =============================================================================
 
