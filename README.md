@@ -4,7 +4,37 @@ Das Projekt hat es zum Ziel eine komplette Lizmap-Umgebung auf einem Ubuntu 24.0
 
 Diese Scripts wurden mit der KI claude.ai, der günstigsten Pro Version für kapp € 20.-, erstellt. Es brauchte unzählige Interaktionen bis alles sauber lief. Nun ist jedoch das Resultat überzeugend!
 
-Im install_lizmap_qgisserver.sh muss man das URL anpassen von karte1.wandelderzeit.ch auf das gewünschte URL. Erst danach das Script mit "bash install_lizmap_qgisserver.sh" ausführen. Danach mit "bash check_installation.sh" prüfen ob alles OK ist. Allenfalls mit "bash check_installation.sh --fix" kann man noch nachkorrigieren.
+Im install_lizmap_qgisserver.sh muss man das URL anpassen von karte1.wandelderzeit.ch auf das gewünschte URL. 
+
+# ---- CONFIGURABLE VARIABLES -------------------------------------------------
+LIZMAP_VERSION="3.9.7"
+LIZMAP_DIR="/var/www/lizmap"
+QGIS_PROJECTS_DIR="/srv/data"
+QGIS_WORKER_COUNT=4          # Number of QGIS Server worker instances
+SERVER_NAME="localhost karte1.wandelderzeit.ch"  # Change to your domain or IP
+LIZMAP_USER="www-data"
+LIZMAP_GROUP="www-data"
+INSTALL_POSTGRESQL=true       # Set to false to skip PostgreSQL
+PG_LIZMAP_DB="lizmap"
+PG_LIZMAP_USER="lizmap"
+PG_LIZMAP_PASS="${PG_LIZMAP_PASS:-lizmap_secret_$(openssl rand -hex 6)}"
+INSTALL_XRDP=true             # Set to false to skip xRDP + XFCE4
+XRDP_USER="gisadmin"          # Dedicated RDP user (created if missing)
+XRDP_PASS="${XRDP_PASS:-GisAdmin_$(openssl rand -hex 4)}"  # Auto-generated, shown at end
+XRDP_PORT=3389
+INSTALL_SECURITY=true         # Set to false to skip UFW + Fail2ban hardening
+CERTBOT_EMAIL=""              # Set to your email to enable automatic HTTPS via Let's Encrypt
+                              # Leave empty to skip certbot (configure manually later)
+LOG_FILE="/var/log/install_lizmap_qgisserver.log"
+# -----------------------------------------------------------------------------
+
+Ausserdem sollte die Anzahl Worker dort angepasst werden.
+
+QGIS_WORKER_COUNT=4          # Number of QGIS Server worker instances
+
+Für ein keines System mit 8 GB Ram auf 2, mit 16 GB auf 4, usw.
+
+Erst danach das Script mit "bash install_lizmap_qgisserver.sh" ausführen. Danach mit "bash check_installation.sh" prüfen ob alles OK ist. Allenfalls mit "bash check_installation.sh --fix" kann man noch nachkorrigieren.
 
 Weiter muss nach der Installation "certbot --nginx -d <URL>" ausgeführt werden. Damit werden in der NGIX-Umgebung die Zertifikate generiert und installiert.
 
