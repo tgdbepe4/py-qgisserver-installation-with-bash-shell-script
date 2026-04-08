@@ -353,8 +353,10 @@ Was geprüft wird:
 2. Via RDP (mstsc / Remmina) auf `<SERVER-IP>:3389` verbinden
 3. QGIS Desktop in der RDP-Session öffnen und `.qgs`/`.qgz` Projekte nach `/srv/data/` speichern
 4. Im QGIS Desktop das **Lizmap QGIS Plugin** installieren und pro Projekt Veröffentlichungsoptionen konfigurieren
-5. HTTPS: wird automatisch konfiguriert wenn `CERTBOT_EMAIL` im Skript gesetzt war;
-   sonst manuell: `certbot --nginx -d karte1.wandelderzeit.ch`
+5. HTTPS: wird automatisch konfiguriert wenn `CERTBOT_EMAIL` im Skript gesetzt war. Sonst manuell nachholen:
+```bash
+certbot --nginx -d karte1.wandelderzeit.ch
+```
 
 ---
 
