@@ -48,7 +48,7 @@ Bei localhost (localhost:3386) muss man einen anderen Port verwenden, damit man 
 
 Im File /srv/qgis/config/preload_projects.txt kann man QGIS projekte aufnehmen, die beim Starten des Systems oder mit "service qgis reload" in den Cache geladen werden. Jedoch nur wie sich das Projekt beim Starten zeigt. So wird das QGIS Projekt ganz schnell im Browser sichtbar.
 
-## Testinstallation mit Hyper-V
+### Testinstallation mit Hyper-V
 Hat man einen Window11 PC zur Verfügung so kann man mit keinen Aufwand dieses Script ausprobieren:
 1. Ubuntu 24.04 Server ISO-Image herunterladen
 2. Hyper-V wenn nicht bereits gemacht bei Windows Features aktivieren
@@ -61,7 +61,7 @@ Hat man einen Window11 PC zur Verfügung so kann man mit keinen Aufwand dieses S
 9. Falls man die Scripte zur Verfügung hat dann wie anderswo auch beschrieben, "bash install_lizmap_qgisserver.sh" und danach "bash check_installation.sh" ausführen.
 10. Ist dies erfolgreich so hat man nun alles wie beschrieben zur Verfügung und kann mit putty und falls gewünscht mit Remote Desktop auf das System zugreifen.
    
-Vollautomatische Installation und Diagnose eines **Lizmap Web Client + py-qgis-server**-Stacks auf **Ubuntu 24.04 LTS**.
+### Vollautomatische Installation und Diagnose eines **Lizmap Web Client + py-qgis-server**-Stacks auf **Ubuntu 24.04 LTS**.
 
 ## Skripte
 
