@@ -38,10 +38,10 @@ LIZMAP_GROUP="www-data"
 INSTALL_POSTGRESQL=true       # Set to false to skip PostgreSQL
 PG_LIZMAP_DB="lizmap"
 PG_LIZMAP_USER="lizmap"
-PG_LIZMAP_PASS="lizmap_secret_$(openssl rand -hex 6)"
+PG_LIZMAP_PASS="${PG_LIZMAP_PASS:-lizmap_secret_$(openssl rand -hex 6)}"
 INSTALL_XRDP=true             # Set to false to skip xRDP + XFCE4
 XRDP_USER="gisadmin"          # Dedicated RDP user (created if missing)
-XRDP_PASS="GisAdmin_$(openssl rand -hex 4)"  # Auto-generated, shown at end
+XRDP_PASS="${XRDP_PASS:-GisAdmin_$(openssl rand -hex 4)}"  # Auto-generated, shown at end
 XRDP_PORT=3389
 INSTALL_SECURITY=true         # Set to false to skip UFW + Fail2ban hardening
 CERTBOT_EMAIL=""              # Set to your email to enable automatic HTTPS via Let's Encrypt
@@ -226,14 +226,20 @@ apt-get install -y -qq python3-psutil python3-venv
 
 python3 -m venv /opt/local/py-qgis-server --system-site-packages
 /opt/local/py-qgis-server/bin/pip install -q -U pip setuptools wheel pysocks typing_extensions
-/opt/local/py-qgis-server/bin/pip install -q py-qgis-server
+/opt/local/py-qgis-server/bin/pip install -q py-qgis-server \
+    || { /opt/local/py-qgis-server/bin/pip install py-qgis-server; \
+         error "pip install py-qgis-server fehlgeschlagen — Abbruch."; }
 
-# qgis-plugin-manager: in dieselbe venv installieren, solange sie frisch und
-# konsistent ist. Ubuntu 24.04 verbietet pip3 system-weit (PEP 668).
-if /opt/local/py-qgis-server/bin/pip install -q qgis-plugin-manager; then
-    log "qgis-plugin-manager installiert."
+# qgis-plugin-manager in eigene isolierte venv installieren (Ubuntu 24.04 PEP 668).
+# Eigene venv verhindert Dependency-Konflikte mit py-qgis-server.
+python3 -m venv /opt/local/qgis-plugin-manager
+if /opt/local/qgis-plugin-manager/bin/pip install -q qgis-plugin-manager; then
+    ln -sf /opt/local/qgis-plugin-manager/bin/qgis-plugin-manager \
+           /usr/local/bin/qgis-plugin-manager
+    log "qgis-plugin-manager installiert (/opt/local/qgis-plugin-manager)."
 else
-    warn "qgis-plugin-manager: pip install fehlgeschlagen — Plugin-Installation läuft via ZIP-Fallback."
+    /opt/local/qgis-plugin-manager/bin/pip install qgis-plugin-manager
+    warn "qgis-plugin-manager: Installation fehlgeschlagen — Plugin-Installation läuft via ZIP-Fallback."
 fi
 
 # Symlink so "qgisserver" is available system-wide (used by supervisor command)
@@ -457,14 +463,16 @@ section "5c. QGIS Server plugins (atlasprint, lizmap_server, wfsOutputExtension)
 # Methode 1 (primär): qgis-plugin-manager — offizielle 3liz CLI für QGIS Server Plugins
 # Installiert direkt aus dem QGIS Plugin Repository, erkennt kompatible Versionen automatisch.
 # https://github.com/3liz/qgis-plugin-manager
-# Installation in die py-qgis-server venv (vermeidet "externally-managed-environment" auf Ubuntu 24.04)
-PYQGIS_VENV="/opt/local/py-qgis-server"
+# Läuft in eigener venv /opt/local/qgis-plugin-manager (kein Konflikt mit py-qgis-server)
 PLUGIN_MGR_BIN=""
-# qgis-plugin-manager wurde bereits in Sektion 5 in die venv installiert.
-# Hier nur prüfen ob das Binary vorhanden ist.
-if [ -x "${PYQGIS_VENV}/bin/qgis-plugin-manager" ]; then
-    PLUGIN_MGR_BIN="${PYQGIS_VENV}/bin/qgis-plugin-manager"
+# qgis-plugin-manager wurde in Sektion 5 in eigene venv installiert + Symlink gesetzt.
+# Suche: zuerst Symlink /usr/local/bin, dann direkt in der venv.
+if [ -x "/usr/local/bin/qgis-plugin-manager" ]; then
+    PLUGIN_MGR_BIN="/usr/local/bin/qgis-plugin-manager"
     log "qgis-plugin-manager verfügbar: ${PLUGIN_MGR_BIN}"
+elif [ -x "/opt/local/qgis-plugin-manager/bin/qgis-plugin-manager" ]; then
+    PLUGIN_MGR_BIN="/opt/local/qgis-plugin-manager/bin/qgis-plugin-manager"
+    log "qgis-plugin-manager verfügbar (venv): ${PLUGIN_MGR_BIN}"
 else
     warn "qgis-plugin-manager Binary nicht gefunden — Plugin-Installation läuft via ZIP-Fallback."
 fi
@@ -513,7 +521,10 @@ install_qgis_plugin() {
 
     log "Installing QGIS plugin: ${name} (${repo})..."
     local latest_url
-    latest_url=$(curl -s --max-time 15 "https://api.github.com/repos/${repo}/releases/latest" \
+    local _curl_auth=()
+    [ -n "${GITHUB_TOKEN:-}" ] && _curl_auth=(-H "Authorization: token ${GITHUB_TOKEN}")
+    latest_url=$(curl -s --max-time 15 "${_curl_auth[@]}" \
+        "https://api.github.com/repos/${repo}/releases/latest" \
         | grep '"browser_download_url"' \
         | grep '\.zip"' \
         | head -1 \
@@ -605,19 +616,11 @@ install_lizmap_server_plugin() {
 
     log "Installing QGIS plugin: lizmap_server ..."
 
-    # Methode 1: QGIS Plugin Repository (direkter Download, bekannte Struktur)
-    try_install_from_zip \
-        "https://plugins.qgis.org/plugins/lizmap_server/version/2.14.1/download/" \
-        "plugins.qgis.org" && return
-
-    # Methode 2: GitHub master branch
-    try_install_from_zip \
-        "https://github.com/3liz/qgis-server-lizmap-plugin/archive/refs/heads/master.zip" \
-        "GitHub master" && return
-
-    # Methode 3: GitHub releases API
+    # Methode 1: GitHub releases API (dynamisch — immer aktuellste kompatible Version)
     local gh_url
-    gh_url=$(curl -s --max-time 15 \
+    local _curl_auth=()
+    [ -n "${GITHUB_TOKEN:-}" ] && _curl_auth=(-H "Authorization: token ${GITHUB_TOKEN}")
+    gh_url=$(curl -s --max-time 15 "${_curl_auth[@]}" \
         "https://api.github.com/repos/3liz/qgis-server-lizmap-plugin/releases/latest" \
         | grep '"browser_download_url"' | grep '\.zip"' | head -1 \
         | sed 's/.*"browser_download_url": "\(.*\)"/\1/')
@@ -625,10 +628,22 @@ install_lizmap_server_plugin() {
         try_install_from_zip "${gh_url}" "GitHub release" && return
     fi
 
+    # Methode 2: GitHub master branch
+    try_install_from_zip \
+        "https://github.com/3liz/qgis-server-lizmap-plugin/archive/refs/heads/master.zip" \
+        "GitHub master" && return
+
+    # Methode 3: QGIS Plugin Repository (Fallback mit bekannter stabiler Version)
+    # LIZMAP_SERVER_PLUGIN_VERSION kann als Env-Variable überschrieben werden
+    local _lzm_ver="${LIZMAP_SERVER_PLUGIN_VERSION:-2.14.1}"
+    try_install_from_zip \
+        "https://plugins.qgis.org/plugins/lizmap_server/version/${_lzm_ver}/download/" \
+        "plugins.qgis.org v${_lzm_ver}" && return
+
     warn "lizmap_server: Alle Download-Methoden fehlgeschlagen!"
     warn "Manuell installieren:"
-    warn "  curl -L -o /tmp/lzm.zip https://plugins.qgis.org/plugins/lizmap_server/version/2.14.1/download/"
-    warn "  unzip /tmp/lzm.zip -d /tmp/lzm_ex && mv /tmp/lzm_ex/lizmap_server /srv/qgis/plugins/"
+    warn "  curl -L -o /tmp/lzm.zip https://github.com/3liz/qgis-server-lizmap-plugin/archive/refs/heads/master.zip"
+    warn "  unzip /tmp/lzm.zip -d /tmp/lzm_ex && mv /tmp/lzm_ex/*/lizmap_server /srv/qgis/plugins/"
 }
 
 if [ ! -d "/srv/qgis/plugins/lizmap_server" ] || [ ! -f "/srv/qgis/plugins/lizmap_server/metadata.txt" ]; then
@@ -1167,7 +1182,7 @@ NGINX
 rm -f /etc/nginx/sites-enabled/default
 ln -sf /etc/nginx/sites-available/lizmap /etc/nginx/sites-enabled/lizmap
 
-nginx -t
+nginx -t || error "Nginx Konfiguration ungültig — bitte Fehler oben prüfen."
 systemctl enable nginx
 systemctl restart nginx
 log "Nginx configured."

@@ -41,25 +41,31 @@ Installation: primär via **qgis-plugin-manager** (3liz CLI), ZIP-Download als F
 | `atlasprint` | github.com/3liz/qgis-atlasprint |
 | `wfsOutputExtension` | github.com/3liz/qgis-wfsOutputExtension |
 
+**Installationsstrategie:**
+
+1. Primär: `qgis-plugin-manager` (CLI) — wird vom Installskript in eigener venv bereitgestellt
+2. Fallback: direkter ZIP-Download von GitHub Releases bzw. GitHub master
+
+`qgis-plugin-manager` läuft in einer **eigenen isolierten venv** (`/opt/local/qgis-plugin-manager`),
+getrennt von py-qgis-server, um Dependency-Konflikte zu vermeiden.
+Symlink: `/usr/local/bin/qgis-plugin-manager`
+
 Plugins manuell aktualisieren (auf bestehendem System):
 ```bash
-# qgis-plugin-manager in die venv installieren (Ubuntu 24.04 — kein pip3 system-weit)
-/opt/local/py-qgis-server/bin/pip install qgis-plugin-manager
-
 export QGIS_PLUGINPATH=/srv/qgis/plugins
-# Falls sources.list noch kein gültiges Format hat (nur Kommentare), einmalig ersetzen:
-echo "https://plugins.qgis.org/plugins/plugins.xml" > /srv/qgis/plugins/sources.list
 
 # QGIS-Version ermitteln (Epoch-Präfix "1:" beachten → grep mitten im String)
 QGIS_VER=$(dpkg -l qgis-server | awk '/^ii.*qgis-server /{print $3}' | grep -oP '\d+\.\d+' | head -1)
 # sources.list mit Version setzen (qgis-plugin-manager 1.7.5 kennt kein --qgis-version Flag)
 echo "https://plugins.qgis.org/plugins/plugins.xml?qgis=${QGIS_VER}" > /srv/qgis/plugins/sources.list
 
-/opt/local/py-qgis-server/bin/qgis-plugin-manager update
-/opt/local/py-qgis-server/bin/qgis-plugin-manager upgrade   # alle Plugins auf neueste Version
+qgis-plugin-manager update
+qgis-plugin-manager upgrade   # alle Plugins auf neueste Version
 
 supervisorctl restart py-qgisserver
 ```
+
+> Falls `qgis-plugin-manager` nicht im PATH: `/opt/local/qgis-plugin-manager/bin/qgis-plugin-manager`
 
 ---
 
@@ -80,6 +86,23 @@ XRDP_PORT=3389
 INSTALL_SECURITY=true         # UFW + Fail2ban
 CERTBOT_EMAIL=""              # E-Mail für Let's Encrypt; leer = HTTPS überspringen
 ```
+
+**Passwörter** (`PG_LIZMAP_PASS`, `XRDP_PASS`) werden beim ersten Lauf zufällig generiert
+und am Ende der Installation angezeigt. Bei erneutem Aufruf des Skripts bleiben sie
+stabil, wenn sie als Umgebungsvariablen exportiert werden:
+
+```bash
+export PG_LIZMAP_PASS="mein-passwort"
+export XRDP_PASS="mein-passwort"
+sudo -E bash install_lizmap_qgisserver.sh
+```
+
+**Optionale Umgebungsvariablen:**
+
+| Variable | Zweck |
+|---|---|
+| `GITHUB_TOKEN` | GitHub Personal Access Token — erhöht API-Limit von 60 auf 5000 req/h beim Plugin-Download |
+| `LIZMAP_SERVER_PLUGIN_VERSION` | Überschreibt die Fallback-Version für `lizmap_server` (Standard: `2.14.1`) |
 
 ### Nginx
 
@@ -190,6 +213,14 @@ lizmap_api=yes
 └── symbology-style.db
 
 /srv/data/                   # QGIS Projektdateien (.qgs / .qgz)
+
+/opt/local/
+├── py-qgis-server/          # Python venv: py-qgis-server (mit --system-site-packages)
+└── qgis-plugin-manager/     # Python venv: qgis-plugin-manager (isoliert, kein Konflikt)
+
+/usr/local/bin/
+├── qgisserver               # Symlink → /opt/local/py-qgis-server/bin/qgisserver
+└── qgis-plugin-manager      # Symlink → /opt/local/qgis-plugin-manager/bin/qgis-plugin-manager
 
 /var/www/lizmap/             # Lizmap Web Client
 ├── lizmap/www/              # Nginx Web Root (index.php)
