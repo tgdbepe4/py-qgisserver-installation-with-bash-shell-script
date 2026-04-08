@@ -46,6 +46,8 @@ start putty.exe -load "<usernam>@<ip adresse des server>" <username>@<ip adresse
 
 Bei localhost (localhost:3386) muss man einen anderen Port verwenden, damit man nicht in Konflikt mit dem lokalen RDP-Server kommt! 
 
+Im File /srv/qgis/config/preload_projects.txt kann man QGIS projekte aufnehmen, die beim Starten des Systems oder mit "service qgis reload" in den Cache geladen werden. Jedoch nur wie sich das Projekt beim Starten zeigt. So wird das QGIS Projekt ganz schnell im Browser sichtbar.
+
 Vollautomatische Installation und Diagnose eines **Lizmap Web Client + py-qgis-server**-Stacks auf **Ubuntu 24.04 LTS**.
 
 ## Skripte
