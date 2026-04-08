@@ -97,23 +97,28 @@ supervisorctl restart py-qgisserver
 
 ### Anpassbare Variablen (Skript-Header)
 
-```bash
-LIZMAP_VERSION="3.9.7"
-LIZMAP_DIR="/var/www/lizmap"
-QGIS_PROJECTS_DIR="/srv/data"
-QGIS_WORKER_COUNT=4
-SERVER_NAME="localhost karte1.wandelderzeit.ch"
-INSTALL_POSTGRESQL=true
-INSTALL_XRDP=true
-XRDP_USER="gisadmin"
-XRDP_PORT=3389
-INSTALL_SECURITY=true         # UFW + Fail2ban
-CERTBOT_EMAIL=""              # E-Mail für Let's Encrypt; leer = HTTPS überspringen
-```
+| Variable | Standardwert | Beschreibung |
+|---|---|---|
+| `LIZMAP_VERSION` | `3.9.7` | Lizmap Web Client Version |
+| `LIZMAP_DIR` | `/var/www/lizmap` | Installationspfad Lizmap |
+| `QGIS_PROJECTS_DIR` | `/srv/data` | Verzeichnis für QGIS-Projektdateien |
+| `QGIS_WORKER_COUNT` | `4` | Anzahl QGIS Server Worker-Instanzen |
+| `SERVER_NAME` | `localhost karte1.wandelderzeit.ch` | Domain oder IP des Servers |
+| `LIZMAP_USER` | `www-data` | Webserver-Benutzer (PHP-FPM / Nginx) |
+| `LIZMAP_GROUP` | `www-data` | Webserver-Gruppe |
+| `INSTALL_POSTGRESQL` | `true` | PostgreSQL + PostGIS installieren (`true`/`false`) |
+| `PG_LIZMAP_DB` | `lizmap` | PostgreSQL Datenbankname |
+| `PG_LIZMAP_USER` | `lizmap` | PostgreSQL Benutzername |
+| `PG_LIZMAP_PASS` | *(auto-generiert)* | PostgreSQL Passwort — stabil bei Re-Run wenn als Env-Variable exportiert |
+| `INSTALL_XRDP` | `true` | xRDP + XFCE4 installieren (`true`/`false`) |
+| `XRDP_USER` | `gisadmin` | Dedizierter RDP-Benutzer |
+| `XRDP_PASS` | *(auto-generiert)* | RDP-Passwort — stabil bei Re-Run wenn als Env-Variable exportiert |
+| `XRDP_PORT` | `3389` | RDP-Port |
+| `INSTALL_SECURITY` | `true` | UFW + Fail2ban installieren (`true`/`false`) |
+| `CERTBOT_EMAIL` | *(leer)* | E-Mail für Let's Encrypt — leer = HTTPS überspringen |
+| `LOG_FILE` | `/var/log/install_lizmap_qgisserver.log` | Pfad zur Installationslogdatei |
 
-**Passwörter** (`PG_LIZMAP_PASS`, `XRDP_PASS`) werden beim ersten Lauf zufällig generiert
-und am Ende der Installation angezeigt. Bei erneutem Aufruf des Skripts bleiben sie
-stabil, wenn sie als Umgebungsvariablen exportiert werden:
+Passwörter bei Re-Run stabil halten:
 
 ```bash
 export PG_LIZMAP_PASS="mein-passwort"
