@@ -96,11 +96,18 @@ CERTBOT_EMAIL=""              # E-Mail für Let's Encrypt; leer = HTTPS überspr
 | Block 1 | `80 default_server` | `_` | IP-Zugriff — immer Lizmap direkt, certbot-unabhängig |
 | Block 2 | `80` | `karte1.wandelderzeit.ch localhost` | Domain — certbot setzt hier HTTPS auf |
 
-| Zugriff | Vor HTTPS | Nach HTTPS |
+| Zugriff | Vor HTTPS | Nach HTTPS (certbot) |
 |---|---|---|
 | `http://<IP>/` | Lizmap direkt | Lizmap direkt |
+| `https://<IP>/` | Lizmap direkt (self-signed) | Lizmap direkt (self-signed) |
 | `http://karte1.wandelderzeit.ch/` | Lizmap direkt | 301 → `https://...` |
-| `https://karte1.wandelderzeit.ch/` | — | Lizmap direkt |
+| `https://karte1.wandelderzeit.ch/` | — | Lizmap direkt (Let's Encrypt) |
+
+**Self-signed Zertifikat** (`/etc/nginx/ssl/lizmap-selfsigned.crt`):
+- Wird beim Install automatisch generiert (10 Jahre gültig)
+- Enthält die öffentliche IP als Subject Alternative Name (SAN)
+- Browser zeigt einmalige Warnung → Ausnahme hinzufügen, danach funktioniert HTTPS
+- certbot berührt dieses Zertifikat nicht
 
 ### py-qgis-server — `/srv/qgis/server.conf`
 

@@ -421,6 +421,59 @@ case "${HTTP_CODE}" in
     *)   fail "HTTP → ${HTTP_CODE:-keine Antwort}" ;;
 esac
 
+# HTTPS via self-signed cert (Block 1 / IP)
+SSL_CERT="/etc/nginx/ssl/lizmap-selfsigned.crt"
+SSL_KEY="/etc/nginx/ssl/lizmap-selfsigned.key"
+
+if [ -f "${SSL_CERT}" ] && [ -f "${SSL_KEY}" ]; then
+    # Ablaufdatum prüfen
+    EXPIRY=$(openssl x509 -enddate -noout -in "${SSL_CERT}" 2>/dev/null \
+             | sed 's/notAfter=//')
+    DAYS_LEFT=$(( ( $(date -d "${EXPIRY}" +%s 2>/dev/null || echo 0) - $(date +%s) ) / 86400 ))
+    # SAN prüfen
+    SAN=$(openssl x509 -text -noout -in "${SSL_CERT}" 2>/dev/null \
+          | grep -A1 "Subject Alternative Name" | tail -1 | tr -d ' ')
+    OK "Self-signed cert: ${SSL_CERT} (gültig noch ${DAYS_LEFT} Tage, SAN: ${SAN})"
+
+    # HTTPS-Antwort testen
+    HTTPS_CODE=$(curl -sk -o /dev/null -w "%{http_code}" --max-time 5 \
+                 "https://127.0.0.1/" 2>/dev/null)
+    case "${HTTPS_CODE}" in
+        200|301|302) OK "HTTPS https://127.0.0.1/ → ${HTTPS_CODE}" ;;
+        *)           fail "HTTPS https://127.0.0.1/ → ${HTTPS_CODE:-keine Antwort}"
+                     INFO "  → nginx -t && systemctl reload nginx" ;;
+    esac
+else
+    warn "Self-signed Zertifikat fehlt: ${SSL_CERT}"
+    INFO "  → HTTPS über IP nicht verfügbar. Zertifikat neu generieren:"
+    INFO "    PUBLIC_IP=\$(curl -s ifconfig.me)"
+    INFO "    mkdir -p /etc/nginx/ssl"
+    INFO "    openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \\"
+    INFO "      -keyout ${SSL_KEY} -out ${SSL_CERT} \\"
+    INFO "      -subj '/CN=lizmap-server' \\"
+    INFO "      -addext \"subjectAltName=IP:\${PUBLIC_IP},IP:127.0.0.1\""
+    INFO "    nginx -t && systemctl reload nginx"
+    if $FIX_MODE; then
+        FIX "Generiere self-signed Zertifikat ..."
+        PUBLIC_IP=$(curl -s --max-time 5 ifconfig.me 2>/dev/null \
+                    || hostname -I | awk '{print $1}')
+        mkdir -p /etc/nginx/ssl
+        openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+            -keyout "${SSL_KEY}" -out "${SSL_CERT}" \
+            -subj "/CN=lizmap-server" \
+            -addext "subjectAltName=IP:${PUBLIC_IP},IP:127.0.0.1" 2>/dev/null \
+            && chmod 600 "${SSL_KEY}" && chmod 644 "${SSL_CERT}" \
+            && OK "Zertifikat erstellt (${PUBLIC_IP})" \
+            || warn "Zertifikat-Generierung fehlgeschlagen"
+        # HTTPS-Listener in Block 1 prüfen/ergänzen
+        if ! grep -q "listen 443 ssl default_server" "${NGINX_AVAILABLE}" 2>/dev/null; then
+            warn "listen 443 ssl default_server fehlt in ${NGINX_AVAILABLE} — manuell ergänzen"
+        else
+            nginx -t && systemctl reload nginx
+        fi
+    fi
+fi
+
 # =============================================================================
 section "5. PHP"
 # =============================================================================
