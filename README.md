@@ -49,7 +49,7 @@ Bei localhost (localhost:3386) muss man einen anderen Port verwenden, damit man 
 Im File /srv/qgis/config/preload_projects.txt kann man QGIS projekte aufnehmen, die beim Starten des Systems oder mit "service qgis reload" in den Cache geladen werden. Jedoch nur wie sich das Projekt beim Starten zeigt. So wird das QGIS Projekt ganz schnell im Browser sichtbar.
 
 ### Testinstallation mit Hyper-V
-Hat man einen Window11 PC zur Verfügung so kann man mit keinen Aufwand dieses Script ausprobieren:
+Hat man einen Window11 PC zur Verfügung so kann man mit wenig Aufwand dieses Script ausprobieren:
 1. Ubuntu 24.04 Server ISO-Image herunterladen
 2. Hyper-V wenn nicht bereits gemacht bei Windows Features aktivieren
 3. Hyper-V PC neu installieren, RAM und Prozessoren nach Wunsch wählen und Netzwerk als "extern" wählen. Unter Manager für virtuelle Switches das Netzwerk extern zuerst aktiviern!
