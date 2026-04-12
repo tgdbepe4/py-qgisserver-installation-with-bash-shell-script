@@ -220,6 +220,12 @@ lizmap_api=yes
 - User: `qgis`
 - Logs: `/var/log/supervisor/py-qgisserver.log` und `py-qgisserver-err.log`
 
+**Worker-Anzahl:** wird **nicht** per `-w` Flag im Kommando gesetzt, sondern ausschliesslich über
+`/srv/qgis/server.conf → [server] workers = N`. So gibt es nur eine einzige Konfigurationsstelle.
+
+Vor der Installation `QGIS_WORKER_COUNT` im Skript-Header setzen — das Skript schreibt diesen Wert
+in `server.conf`. Empfehlung: ~50 % der CPU-Kerne. Siehe `anleitung_worker.md` und `worker_rechner.html`.
+
 ---
 
 ## Verzeichnisstruktur

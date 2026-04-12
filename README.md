@@ -4,38 +4,7 @@ Das Projekt hat es zum Ziel eine komplette Lizmap-Umgebung auf einem Ubuntu 24.0
 
 Diese Scripts wurden mit der KI claude.ai, der günstigsten Pro Version für kapp € 20.-, erstellt. Es brauchte unzählige Interaktionen bis alles sauber lief. Nun ist jedoch das Resultat überzeugend!
 
-Im install_lizmap_qgisserver.sh muss man das URL anpassen von karte1.wandelderzeit.ch auf das gewünschte URL. 
-
-### Anpassbare Variablen (Skript-Header)
-
-| Variable | Standardwert | Beschreibung |
-|---|---|---|
-| `LIZMAP_VERSION` | `3.9.7` | Lizmap Web Client Version |
-| `LIZMAP_DIR` | `/var/www/lizmap` | Installationspfad Lizmap |
-| `QGIS_PROJECTS_DIR` | `/srv/data` | Verzeichnis für QGIS-Projektdateien |
-| `QGIS_WORKER_COUNT` | `4` | Anzahl QGIS Server Worker-Instanzen |
-| `SERVER_NAME` | `localhost karte1.wandelderzeit.ch` | Domain oder IP des Servers |
-| `LIZMAP_USER` | `www-data` | Webserver-Benutzer (PHP-FPM / Nginx) |
-| `LIZMAP_GROUP` | `www-data` | Webserver-Gruppe |
-| `INSTALL_POSTGRESQL` | `true` | PostgreSQL + PostGIS installieren (`true`/`false`) |
-| `PG_LIZMAP_DB` | `lizmap` | PostgreSQL Datenbankname |
-| `PG_LIZMAP_USER` | `lizmap` | PostgreSQL Benutzername |
-| `PG_LIZMAP_PASS` | *(auto-generiert)* | PostgreSQL Passwort — stabil bei Re-Run wenn als Env-Variable exportiert |
-| `INSTALL_XRDP` | `true` | xRDP + XFCE4 installieren (`true`/`false`) |
-| `XRDP_USER` | `gisadmin` | Dedizierter RDP-Benutzer |
-| `XRDP_PASS` | *(auto-generiert)* | RDP-Passwort — stabil bei Re-Run wenn als Env-Variable exportiert |
-| `XRDP_PORT` | `3389` | RDP-Port |
-| `INSTALL_SECURITY` | `true` | UFW + Fail2ban installieren (`true`/`false`) |
-| `CERTBOT_EMAIL` | *(leer)* | E-Mail für Let's Encrypt — leer = HTTPS überspringen |
-| `LOG_FILE` | `/var/log/install_lizmap_qgisserver.log` | Pfad zur Installationslogdatei |
-
-Ausserdem sollte die Anzahl Worker dort angepasst werden.
-
-QGIS_WORKER_COUNT=4          # Number of QGIS Server worker instances
-
-Für ein keines System mit 8 GB Ram auf 2, mit 16 GB auf 4, usw.
-
-Erst danach das Script mit "bash install_lizmap_qgisserver.sh" ausführen. Danach mit "bash check_installation.sh" prüfen ob alles OK ist. Allenfalls mit "bash check_installation.sh --fix" kann man noch nachkorrigieren.
+Im Skript-Header `SERVER_NAME` auf die eigene Domain anpassen, `QGIS_WORKER_COUNT` auf die Hardware abstimmen (siehe [Worker-Konfiguration](#worker-konfiguration)), dann ausführen. Danach mit `check_installation.sh` prüfen, allenfalls mit `--fix` nachkorrigieren.
 
 Weiter muss nach der Installation "certbot --nginx -d <URL>" ausgeführt werden. Damit werden in der NGIX-Umgebung die Zertifikate generiert und installiert.
 
@@ -46,30 +15,19 @@ start putty.exe -load "<usernam>@<ip adresse des server>" <username>@<ip adresse
 
 Bei localhost (localhost:3386) muss man einen anderen Port verwenden, damit man nicht in Konflikt mit dem lokalen RDP-Server kommt! 
 
-Im File /srv/qgis/config/preload_projects.txt kann man QGIS projekte aufnehmen, die beim Starten des Systems oder mit "service qgis reload" in den Cache geladen werden. Jedoch nur wie sich das Projekt beim Starten zeigt. So wird das QGIS Projekt ganz schnell im Browser sichtbar.
-
-### Testinstallation mit Hyper-V
-Hat man einen Window11 PC zur Verfügung so kann man mit wenig Aufwand dieses Script ausprobieren:
-1. Ubuntu 24.04 Server ISO-Image herunterladen
-2. Hyper-V wenn nicht bereits gemacht bei Windows Features aktivieren
-3. Hyper-V PC neu installieren, RAM und Prozessoren nach Wunsch wählen und Netzwerk als "extern" wählen. Unter Manager für virtuelle Switches das Netzwerk extern zuerst aktiviern!
-4. ISO Ubuntu 24.04 Image einbinden.
-5. Starten
-6. Installieren!
-7. Etwas später sollte man eine Ubuntu 24.04 Clean Installation haben.
-8. Nun muss man das Installationsscript, install_lizmap_qgisserver.sh und das check_installation.sh auf dem Ubunutu zur Verfügung haben. Fall diese auf dem Windows PC verfügbar sind so kann man nach Freigabe den bestimmten Ordner als SMB Ordner im Ubuntu mounten. Dazu im Ubuntu mindesten "apt install samba" installieren. Das Weitere dazu finden man im Internet.
-9. Falls man die Scripte zur Verfügung hat dann wie anderswo auch beschrieben, "bash install_lizmap_qgisserver.sh" und danach "bash check_installation.sh" ausführen.
-10. Ist dies erfolgreich so hat man nun ein laufbares py-qgisserver Lizmap System zur Verfügung und kann mit putty und falls gewünscht mit Remote Desktop auf das System zugreifen. 
-   
-### Vollautomatische Installation und Diagnose eines **Lizmap Web Client + py-qgis-server**-Stacks auf **Ubuntu 24.04 LTS**.
+Vollautomatische Installation und Diagnose eines **Lizmap Web Client + py-qgis-server**-Stacks auf **Ubuntu 24.04 LTS**.
 
 ## Skripte
 
 | Skript | Zweck |
 |---|---|
-| `install_lizmap_qgisserver.sh` | Vollinstallation des gesamten Stacks |
+| `install_lizmap_qgisserver.sh` | Vollinstallation — `QGIS_WORKER_COUNT` im Header anpassen |
+| `install_lizmap_qgisserver_8cpu.sh` | Vollinstallation — voreingestellt für 8 CPU-Kerne (4 Worker) |
+| `install_lizmap_qgisserver_16cpu.sh` | Vollinstallation — voreingestellt für 16 CPU-Kerne (8 Worker) |
 | `check_installation.sh` | Diagnose + optionale Fehlerkorrektur (`--fix`) |
 | `backup_lizmap_system.sh` | Backup aller Konfigurationen und Daten |
+
+Andere Hardware → [Worker Rechner](worker_rechner.html) öffnen, Werte berechnen lassen, dann `QGIS_WORKER_COUNT` im Skript-Header anpassen.
 
 ## Was wird installiert
 
@@ -93,9 +51,17 @@ Hat man einen Window11 PC zur Verfügung so kann man mit wenig Aufwand dieses Sc
 
 ```bash
 # Als root auf Ubuntu 24.04 LTS:
-wget https://raw.githubusercontent.com/<user>/py-qgisserver/main/install_lizmap_qgisserver.sh
-nano install_lizmap_qgisserver.sh   # Variablen oben im Skript anpassen
-sudo bash install_lizmap_qgisserver.sh
+git clone https://github.com/tgdbepe4/py-qgisserver-installation-with-bash-shell-script
+cd py-qgisserver-installation-with-bash-shell-script
+
+# Variablen im Skript-Header anpassen (SERVER_NAME, CERTBOT_EMAIL, QGIS_WORKER_COUNT, …):
+nano install_lizmap_qgisserver_8cpu.sh    # für 8 CPU-Kerne
+# oder
+nano install_lizmap_qgisserver_16cpu.sh   # für 16 CPU-Kerne
+# oder
+nano install_lizmap_qgisserver.sh         # Basis-Skript, QGIS_WORKER_COUNT manuell setzen
+
+sudo bash install_lizmap_qgisserver_8cpu.sh
 ```
 
 ## Konfiguration
@@ -104,13 +70,16 @@ Die wichtigsten Variablen befinden sich im Skript-Header:
 
 ```bash
 SERVER_NAME="localhost karte1.example.com"  # Domain / IP des Servers
+QGIS_WORKER_COUNT=4                          # Worker-Prozesse (≈ CPU-Kerne ÷ 2)
 INSTALL_POSTGRESQL=true                      # PostgreSQL + PostGIS
 INSTALL_XRDP=true                            # Remote Desktop
 INSTALL_SECURITY=true                        # UFW + Fail2ban
 CERTBOT_EMAIL=""                             # E-Mail → HTTPS automatisch aktivieren
 ```
 
-Wenn `CERTBOT_EMAIL` gesetzt ist, läuft certbot vollautomatisch am Ende der Installation (inkl. IP-Redirect-Fix nach dem certbot-Eingriff in den Nginx-Vhost).
+**Worker-Anzahl:** `QGIS_WORKER_COUNT` im Skript-Header setzen — das Skript schreibt diesen Wert in `/srv/qgis/server.conf`. Das ist die einzige Stelle, an der die Worker-Anzahl konfiguriert wird (kein `-w` Flag im Supervisor). Siehe [anleitung_worker.md](anleitung_worker.md) und [worker_rechner.html](worker_rechner.html).
+
+Wenn `CERTBOT_EMAIL` gesetzt ist, läuft certbot vollautomatisch am Ende der Installation.
 
 ## Nach der Installation
 
@@ -157,6 +126,12 @@ supervisorctl status py-qgisserver
 | 7200 | py-qgis-server (nur localhost) |
 | 5432 | PostgreSQL (optional) |
 | 3389 | xRDP Remote Desktop (optional) |
+
+## Worker-Konfiguration
+
+Siehe [anleitung_worker.md](anleitung_worker.md) für eine vollständige Erklärung der Worker-Parameter und wie sie sich auf RAM und CPU auswirken.
+
+Der interaktive [Worker Rechner](worker_rechner.html) berechnet `QGIS_WORKER_COUNT`, `QGSRV_CACHE_SIZE` und `memory_high_water_mark` basierend auf CPU-Kernen, RAM und erwarteter Nutzerzahl.
 
 ## Referenzen
 

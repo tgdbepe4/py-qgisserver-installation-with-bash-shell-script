@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QGIS Worker Rechner — py-qgis-server</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 20px; background: #f8f9fa; color: #212529; }
+  h1 { font-size: 1.5rem; margin-bottom: 0.25em; }
+  h2 { font-size: 1.1rem; margin-top: 1.8em; margin-bottom: 0.4em; border-bottom: 1px solid #dee2e6; padding-bottom: 0.2em; }
+  p.lead { color: #6c757d; margin-top: 0; }
+  label { display: block; margin-top: 1em; font-weight: 600; }
+  label span { font-weight: 400; color: #6c757d; font-size: 0.9em; }
+  input[type=range] { width: 100%; margin: 0.4em 0 0.1em; }
+  .val { font-size: 1.1em; font-weight: 700; color: #0d6efd; }
+  .result-box { background: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 1.2em 1.5em; margin-top: 1.5em; }
+  .result-row { display: flex; justify-content: space-between; align-items: baseline; margin: 0.35em 0; }
+  .result-label { color: #495057; }
+  .result-value { font-weight: 700; font-size: 1.05em; }
+  .highlight { color: #198754; font-size: 1.25em; }
+  .warn { color: #dc3545; }
+  .code-block { background: #212529; color: #f8f9fa; border-radius: 6px; padding: 1em 1.2em; font-family: monospace; font-size: 0.92em; margin-top: 1em; white-space: pre; overflow-x: auto; }
+  .note { background: #fff3cd; border-left: 4px solid #ffc107; padding: 0.6em 1em; margin-top: 1em; font-size: 0.9em; border-radius: 0 4px 4px 0; }
+  footer { margin-top: 2.5em; font-size: 0.82em; color: #adb5bd; }
+</style>
+</head>
+<body>
+
+<h1>QGIS Worker Rechner</h1>
+<p class="lead">Berechnet optimale Werte für <code>QGIS_WORKER_COUNT</code>, <code>QGSRV_CACHE_SIZE</code> und <code>memory_high_water_mark</code> für py-qgis-server auf Ubuntu 24.04.</p>
+
+<h2>Server-Ressourcen eingeben</h2>
+
+<label>CPU-Kerne: <span id="cpu_lbl" class="val">8</span></label>
+<input type="range" id="cpu" min="2" max="64" step="2" value="8" oninput="calc()">
+
+<label>RAM gesamt: <span id="ram_lbl" class="val">16</span> GB</label>
+<input type="range" id="ram" min="4" max="256" step="4" value="16" oninput="calc()">
+
+<label>Gleichzeitige Nutzer (Spitzenlast): <span id="users_lbl" class="val">10</span></label>
+<input type="range" id="users" min="1" max="200" step="1" value="10" oninput="calc()">
+
+<label>Durchschnittl. Projektgrösse: <span id="projsize_lbl" class="val">500</span> MB (RAM pro Worker)</label>
+<input type="range" id="projsize" min="50" max="4000" step="50" value="500" oninput="calc()">
+
+<h2>Empfehlung</h2>
+<div class="result-box">
+  <div class="result-row">
+    <span class="result-label">QGIS_WORKER_COUNT</span>
+    <span class="result-value highlight" id="r_workers">—</span>
+  </div>
+  <div class="result-row">
+    <span class="result-label">QGSRV_CACHE_SIZE (Projekte im RAM)</span>
+    <span class="result-value" id="r_cache">—</span>
+  </div>
+  <div class="result-row">
+    <span class="result-label">memory_high_water_mark</span>
+    <span class="result-value" id="r_hwm">—</span>
+  </div>
+  <div class="result-row">
+    <span class="result-label">Geschätzter RAM-Bedarf (Worker + Cache)</span>
+    <span class="result-value" id="r_ramuse">—</span>
+  </div>
+  <div class="result-row">
+    <span class="result-label">Freier RAM (OS + Nginx + PHP + PG)</span>
+    <span class="result-value" id="r_ramfree">—</span>
+  </div>
+  <div id="r_warn" class="note" style="display:none"></div>
+</div>
+
+<h2>Konfigurationsausschnitte</h2>
+
+<p>In <code>install_lizmap_qgisserver_8cpu.sh</code> / <code>_16cpu.sh</code> — Variablen-Header:</p>
+<div class="code-block" id="code_vars"></div>
+
+<p>In <code>/srv/qgis/server.conf</code> — Sektion <code>[server]</code>:</p>
+<div class="code-block" id="code_conf"></div>
+
+<p>In <code>/etc/supervisor/conf.d/py-qgisserver.conf</code> — <code>environment=</code>-Zeile (Auszug):</p>
+<div class="code-block" id="code_env"></div>
+
+<div class="note">
+  <strong>Hinweis:</strong> Workers werden ausschliesslich über <code>server.conf → workers = N</code> gesteuert.
+  Der <code>-w</code> Flag im Supervisor-Kommando wird <strong>nicht</strong> verwendet (seit v2-Skript).
+</div>
+
+<h2>Faustregel</h2>
+<ul>
+  <li>Workers ≈ CPU-Kerne ÷ 2 (I/O-gebunden, mindestens 2)</li>
+  <li>Nie mehr Workers als RAM erlaubt (je Worker ~500 MB–2 GB je nach Projektkomplexität)</li>
+  <li>Cache-Grösse: 1–2× Workeranzahl (häufig genutzte Projekte bleiben im Speicher)</li>
+  <li><code>memory_high_water_mark = 0.75</code> schützt vor OOM-Kills</li>
+</ul>
+
+<footer>py-qgisserver Worker Rechner · github.com/tgdbepe4/py-qgisserver-installation-with-bash-shell-script</footer>
+
+<script>
+function calc() {
+  const cpu      = +document.getElementById('cpu').value;
+  const ram      = +document.getElementById('ram').value;       // GB
+  const users    = +document.getElementById('users').value;
+  const projMB   = +document.getElementById('projsize').value;  // MB per worker
+
+  document.getElementById('cpu_lbl').textContent   = cpu;
+  document.getElementById('ram_lbl').textContent   = ram;
+  document.getElementById('users_lbl').textContent = users;
+  document.getElementById('projsize_lbl').textContent = projMB;
+
+  // Worker count: half of CPUs, but cap by RAM and boost if many concurrent users
+  const workersByCpu  = Math.max(2, Math.floor(cpu / 2));
+  const ramForQgis    = ram * 0.60;                              // 60% of RAM for QGIS
+  const workersByRam  = Math.max(1, Math.floor((ramForQgis * 1024) / projMB));
+  const workersByUser = Math.max(2, Math.min(users, Math.floor(cpu * 0.75)));
+  let workers = Math.min(workersByCpu, workersByRam, workersByUser);
+  workers = Math.max(2, workers);
+
+  // Cache: 1.5× workers, at least 4, limited by RAM
+  const cache = Math.min(Math.max(4, Math.round(workers * 1.5)), workersByRam + 2);
+
+  // RAM usage estimate
+  const ramWorkers = (workers * projMB) / 1024;       // GB
+  const ramCache   = Math.max(0, (cache - workers) * projMB / 1024);
+  const ramTotal   = ramWorkers + ramCache;
+  const ramFree    = ram - ramTotal;
+  const hwm        = ramFree < 2 ? 0.70 : 0.75;
+
+  // Display
+  document.getElementById('r_workers').textContent = workers;
+  document.getElementById('r_cache').textContent   = cache;
+  document.getElementById('r_hwm').textContent     = hwm.toFixed(2);
+  document.getElementById('r_ramuse').textContent  = ramTotal.toFixed(1) + ' GB';
+
+  const freeEl = document.getElementById('r_ramfree');
+  freeEl.textContent = ramFree.toFixed(1) + ' GB';
+  freeEl.className = 'result-value' + (ramFree < 2 ? ' warn' : '');
+
+  const warnEl = document.getElementById('r_warn');
+  if (ramFree < 1) {
+    warnEl.style.display = '';
+    warnEl.innerHTML = '<strong>Warnung:</strong> Sehr wenig freier RAM. Worker- oder Projektzahl reduzieren, oder mehr RAM einplanen.';
+  } else if (ramFree < 3) {
+    warnEl.style.display = '';
+    warnEl.innerHTML = '<strong>Achtung:</strong> Knapper freier RAM für OS + Nginx + PHP + PostgreSQL. Bitte prüfen.';
+  } else {
+    warnEl.style.display = 'none';
+  }
+
+  // Code snippets
+  document.getElementById('code_vars').textContent =
+    `QGIS_WORKER_COUNT=${workers}   # Anzahl Worker-Prozesse`;
+
+  document.getElementById('code_conf').textContent =
+    `[server]\nworkers = ${workers}\nmemory_high_water_mark = ${hwm.toFixed(2)}`;
+
+  document.getElementById('code_env').textContent =
+    `QGIS_SERVER_PARALLEL_RENDERING="1",QGSRV_CACHE_SIZE="${cache}"`;
+}
+
+calc();
+</script>
+</body>
+</html>

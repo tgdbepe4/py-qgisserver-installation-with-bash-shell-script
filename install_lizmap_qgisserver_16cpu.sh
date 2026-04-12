@@ -1,9 +1,10 @@
 #!/bin/bash
 # =============================================================================
-# Lizmap Web Client + py-qgis-server Installation Script
+# Lizmap Web Client + py-qgis-server Installation Script — 16 CPU variant
 # Ubuntu 24.04 LTS (Noble Numbat)
+# Optimiert für Server mit 16 CPU-Kernen (QGIS_WORKER_COUNT=8)
 # =============================================================================
-# Usage: sudo bash install_lizmap_qgisserver.sh
+# Usage: sudo bash install_lizmap_qgisserver_16cpu.sh
 #
 # What this script installs:
 #   - QGIS Server LTR (via official QGIS apt repository)
@@ -31,7 +32,7 @@ set -uo pipefail
 LIZMAP_VERSION="3.9.7"
 LIZMAP_DIR="/var/www/lizmap"
 QGIS_PROJECTS_DIR="/srv/data"
-QGIS_WORKER_COUNT=6          # Number of QGIS Server worker instances
+QGIS_WORKER_COUNT=8          # Number of QGIS Server worker instances (16 CPU: 8 Worker)
 SERVER_NAME="localhost karte1.wandelderzeit.ch"  # Change to your domain or IP
 LIZMAP_USER="www-data"
 LIZMAP_GROUP="www-data"
@@ -722,15 +723,13 @@ cat > /etc/supervisor/conf.d/py-qgisserver.conf <<EOF
 ; Flag is -c (short form), not --conf — as per official Lizmap docs.
 command=/opt/local/py-qgis-server/bin/qgisserver -c /srv/qgis/server.conf
 user=qgis
-; Worker-Anzahl wird ausschliesslich über server.conf [server] workers = N gesteuert.
-; Der -w Flag wird bewusst weggelassen um Doppelkonfiguration zu vermeiden.
 ; Full environment as per docs.lizmap.com/3.9/en/install/py-qgis-server.html
 ; QGIS_OPTIONS_PATH  → QGIS finds QGIS3.ini (plugin paths, cache config)
 ; QGIS_AUTH_DB_DIR_PATH → authentication database location
 ; QGIS_SERVER_LIZMAP_REVEAL_SETTINGS=TRUE (uppercase!) → enables /lizmap/server.json
 ; QGIS_SERVER_PARALLEL_RENDERING=1 → enables parallel tile rendering per worker
 ; QGSRV_CACHE_SIZE → max number of QGIS projects held in memory (LRU)
-environment=LC_ALL="en_US.UTF-8",HOME="/srv/qgis",DISPLAY=":99",QT_QPA_PLATFORM="xcb",LIBGL_ALWAYS_SOFTWARE="1",QGIS_OPTIONS_PATH="/srv/qgis/",QGIS_AUTH_DB_DIR_PATH="/srv/qgis/",QGIS_SERVER_LOG_LEVEL="1",QGIS_DEBUG="0",QGSRV_SERVER_PLUGINPATH="/srv/qgis/plugins",QGIS_PLUGINPATH="/srv/qgis/plugins",QGIS_SERVER_LIZMAP_REVEAL_SETTINGS="TRUE",QGIS_SERVER_FORCE_READONLY_LAYERS="TRUE",QGSRV_API_ENABLED_LIZMAP="yes",QGSRV_API_ENDPOINTS_LIZMAP="/lizmap",QGIS_SERVER_PARALLEL_RENDERING="1",QGSRV_CACHE_SIZE="6"
+environment=LC_ALL="en_US.UTF-8",HOME="/srv/qgis",DISPLAY=":99",QT_QPA_PLATFORM="xcb",LIBGL_ALWAYS_SOFTWARE="1",QGIS_OPTIONS_PATH="/srv/qgis/",QGIS_AUTH_DB_DIR_PATH="/srv/qgis/",QGIS_SERVER_LOG_LEVEL="1",QGIS_DEBUG="0",QGSRV_SERVER_PLUGINPATH="/srv/qgis/plugins",QGIS_PLUGINPATH="/srv/qgis/plugins",QGIS_SERVER_LIZMAP_REVEAL_SETTINGS="TRUE",QGIS_SERVER_FORCE_READONLY_LAYERS="TRUE",QGSRV_API_ENABLED_LIZMAP="yes",QGSRV_API_ENDPOINTS_LIZMAP="/lizmap",QGIS_SERVER_PARALLEL_RENDERING="1",QGSRV_CACHE_SIZE="12"
 autostart=true
 autorestart=true
 stdout_logfile=/var/log/supervisor/py-qgisserver.log
