@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<!-- saved from url=(0052)file:///C:/Users/peter/Downloads/worker_rechner.html -->
+<html lang="de"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>py-qgis-server Worker-Rechner</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #f5f4f0;
+    --surface:   #ffffff;
+    --surface2:  #f0efe9;
+    --border:    rgba(0,0,0,0.1);
+    --text:      #1a1a18;
+    --muted:     #6b6b67;
+    --accent:    #185FA5;
+    --ok-bg:     #eaf3de;
+    --ok-border: #639922;
+    --ok-text:   #3B6D11;
+    --warn-bg:   #faeeda;
+    --warn-border:#BA7517;
+    --warn-text: #854F0B;
+    --mono:      'Courier New', monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:        #1a1a18;
+      --surface:   #242422;
+      --surface2:  #2e2e2b;
+      --border:    rgba(255,255,255,0.1);
+      --text:      #f0efe9;
+      --muted:     #9a9a94;
+      --accent:    #85B7EB;
+      --ok-bg:     #173404;
+      --ok-border: #639922;
+      --ok-text:   #C0DD97;
+      --warn-bg:   #412402;
+      --warn-border:#BA7517;
+      --warn-text: #FAC775;
+    }
+  }
+
+  body {
+    font-family: Georgia, 'Times New Roman', serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 2rem 1rem;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 560px;
+  }
+
+  header {
+    margin-bottom: 2rem;
+  }
+
+  header h1 {
+    font-size: 22px;
+    font-weight: normal;
+    letter-spacing: -0.3px;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  header p {
+    font-size: 14px;
+    color: var(--muted);
+    font-family: 'Courier New', monospace;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .field { margin-bottom: 1.25rem; }
+  .field:last-child { margin-bottom: 0; }
+
+  .field-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+  }
+
+  .field-label span:first-child {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: 'Courier New', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .field-label span:last-child {
+    font-size: 16px;
+    font-weight: bold;
+    color: var(--text);
+  }
+
+  input[type="range"] {
+    width: 100%;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: none;
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: none;
+  }
+
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--text);
+  }
+
+  .checkbox-row input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 1rem;
+  }
+
+  .metric {
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+  }
+
+  .metric-label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: 'Courier New', monospace;
+    margin-bottom: 6px;
+  }
+
+  .metric-val {
+    font-size: 26px;
+    font-weight: bold;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .metric-unit {
+    font-size: 13px;
+    color: var(--muted);
+    margin-left: 2px;
+  }
+
+  .status {
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+  }
+
+  .status.ok   { background: var(--ok-bg);   border: 0.5px solid var(--ok-border); }
+  .status.warn { background: var(--warn-bg); border: 0.5px solid var(--warn-border); }
+
+  .status-title {
+    font-size: 14px;
+    font-weight: bold;
+    margin-bottom: 4px;
+  }
+
+  .ok   .status-title { color: var(--ok-text); }
+  .warn .status-title { color: var(--warn-text); }
+
+  .status-text {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .divider {
+    border: none;
+    border-top: 0.5px solid var(--border);
+    margin: 1.25rem 0;
+  }
+
+  .section-label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: 'Courier New', monospace;
+    margin-bottom: 8px;
+  }
+
+  .conf {
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    color: var(--muted);
+    line-height: 1.8;
+  }
+
+  .conf .highlight { color: var(--accent); font-weight: bold; }
+  .conf .key { color: var(--text); }
+
+  .formula {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'Courier New', monospace;
+    line-height: 1.8;
+    margin-top: 0.5rem;
+  }
+
+  footer {
+    margin-top: 1.5rem;
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'Courier New', monospace;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>Worker-Rechner</h1>
+    <p>py-qgis-server / Lizmap</p>
+  </header>
+
+  <div class="card">
+    <div class="field">
+      <div class="field-label">
+        <span>vCPU</span>
+        <span id="cpu-out">8 vCPU</span>
+      </div>
+      <input type="range" id="cpu" min="2" max="64" value="16" step="2">
+    </div>
+
+    <div class="field">
+      <div class="field-label">
+        <span>RAM</span>
+        <span id="ram-out">16 GB</span>
+      </div>
+      <input type="range" id="ram" min="4" max="256" value="32" step="4">
+    </div>
+
+    <div class="field">
+      <label class="checkbox-row">
+        <input type="checkbox" id="pg" checked="">
+        PostgreSQL lokal (selber Server)
+      </label>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric">
+      <div class="metric-label">Workers</div>
+      <div class="metric-val" id="m-workers">5</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">RAM Worker</div>
+      <div class="metric-val" id="m-ram">8<span class="metric-unit">GB</span></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">RAM frei</div>
+      <div class="metric-val" id="m-free">3<span class="metric-unit">GB</span></div>
+    </div>
+  </div>
+
+  <div id="status" class="status ok">
+    <div class="status-title" id="status-title">CPU-limitiert</div>
+    <div class="status-text" id="status-text">CPU ist der Engpass. RAM wäre für 7 Worker ausreichend.</div>
+  </div>
+
+  <div class="card">
+    <div class="section-label">/srv/qgis/server.conf</div>
+    <div class="conf">
+      [server]<br>
+      <span class="key">port</span> = 7200<br>
+      <span class="key">interfaces</span> = 127.0.0.1<br>
+      <span class="key">workers</span> = <span class="highlight" id="conf-workers">5</span>
+    </div>
+
+    <hr class="divider">
+
+    <div class="section-label">Formel</div>
+    <div class="formula" id="formula">CPU-Limit  : 8 − 3 (Overhead) = 5 Worker<br>Reserviert : OS 2GB + Lizmap 1GB + PG 2GB = 5GB<br>RAM-Limit  : (16 − 5) ÷ 1.5 = 7 Worker<br>──────────────────────────────<br>Resultat   : min(5, 7) = <strong>5 Worker</strong></div>
+  </div>
+
+  <footer>py-qgis-server — docs.3liz.org/py-qgis-server</footer>
+
+</div>
+
+<script>
+  const RAM_PER_WORKER = 1.5;
+  const OVERHEAD_CPU   = 3;
+  const OS_RAM         = 2;
+  const PG_RAM         = 2;
+  const LIZMAP_RAM     = 1;
+
+  function calc() {
+    const cpu = parseInt(document.getElementById('cpu').value);
+    const ram = parseInt(document.getElementById('ram').value);
+    const pg  = document.getElementById('pg').checked;
+
+    document.getElementById('cpu-out').textContent = cpu + ' vCPU';
+    document.getElementById('ram-out').textContent = ram + ' GB';
+
+    const maxByCpu = Math.max(1, cpu - OVERHEAD_CPU);
+    const reserved = OS_RAM + LIZMAP_RAM + (pg ? PG_RAM : 0);
+    const availRam = ram - reserved;
+    const maxByRam = Math.max(1, Math.floor(availRam / RAM_PER_WORKER));
+    const workers  = Math.min(maxByCpu, maxByRam);
+    const ramUsed  = Math.round(workers * RAM_PER_WORKER);
+    const ramFree  = ram - reserved - ramUsed;
+
+    document.getElementById('m-workers').textContent  = workers;
+    document.getElementById('m-ram').innerHTML        = ramUsed + '<span class="metric-unit">GB</span>';
+    document.getElementById('m-free').innerHTML       = Math.max(0, ramFree) + '<span class="metric-unit">GB</span>';
+    document.getElementById('conf-workers').textContent = workers;
+
+    const pgLabel = pg ? 'OS 2GB + Lizmap 1GB + PG 2GB = ' + reserved + 'GB' : 'OS 2GB + Lizmap 1GB = ' + reserved + 'GB';
+    document.getElementById('formula').innerHTML =
+      'CPU-Limit  : ' + cpu + ' − ' + OVERHEAD_CPU + ' (Overhead) = ' + maxByCpu + ' Worker<br>' +
+      'Reserviert : ' + pgLabel + '<br>' +
+      'RAM-Limit  : (' + ram + ' − ' + reserved + ') ÷ 1.5 = ' + maxByRam + ' Worker<br>' +
+      '──────────────────────────────<br>' +
+      'Resultat   : min(' + maxByCpu + ', ' + maxByRam + ') = <strong>' + workers + ' Worker</strong>';
+
+    const box   = document.getElementById('status');
+    const title = document.getElementById('status-title');
+    const text  = document.getElementById('status-text');
+
+    box.className = 'status';
+    if (workers <= 2) {
+      box.classList.add('warn');
+      title.textContent = 'Wenig Kapazität';
+      text.textContent  = 'Für Produktion mindestens 4 vCPU / 8 GB empfohlen.';
+    } else if (ramFree < 2) {
+      box.classList.add('warn');
+      title.textContent = 'RAM knapp';
+      text.textContent  = 'Weniger als 2 GB RAM übrig. Bei schweren QGIS-Projekten kann Swapping auftreten — Worker ggf. reduzieren.';
+    } else if (maxByCpu < maxByRam) {
+      box.classList.add('ok');
+      title.textContent = 'CPU-limitiert';
+      text.textContent  = 'CPU ist der Engpass. RAM wäre für ' + maxByRam + ' Worker ausreichend.';
+    } else if (maxByRam < maxByCpu) {
+      box.classList.add('ok');
+      title.textContent = 'RAM-limitiert';
+      text.textContent  = 'RAM ist der Engpass. CPU würde ' + maxByCpu + ' Worker erlauben.';
+    } else {
+      box.classList.add('ok');
+      title.textContent = 'Gut konfiguriert';
+      text.textContent  = 'CPU und RAM sind ausgewogen. ' + workers + ' Worker optimal für dieses System.';
+    }
+  }
+
+  document.getElementById('cpu').addEventListener('input', calc);
+  document.getElementById('ram').addEventListener('input', calc);
+  document.getElementById('pg').addEventListener('change', calc);
+  calc();
+</script>
+
+
+</body></html>
