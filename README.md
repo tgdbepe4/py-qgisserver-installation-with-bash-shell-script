@@ -133,6 +133,49 @@ Siehe [anleitung_worker.md](anleitung_worker.md) für eine vollständige Erklär
 
 Der interaktive [Worker Rechner](worker_rechner.html) berechnet `QGIS_WORKER_COUNT`, `QGSRV_CACHE_SIZE` und `memory_high_water_mark` basierend auf CPU-Kernen, RAM und erwarteter Nutzerzahl.
 
+Wieso geben die zwei rechner html programme eine unterschiedliche anzahl worker aus?
+
+Die beiden Rechner verwenden **unterschiedliche Formeln und unterschiedliche Standardwerte**. Hier die konkreten Unterschiede:
+
+## Standardwerte (Slider-Defaults)
+
+| | `worker_rechner.html` | `Vereinfachter Worker-Rechner.html` |
+|---|---|---|
+| CPU | 8 | **16** |
+| RAM | 16 GB | **32 GB** |
+
+## Formeln — völlig verschieden
+
+**`worker_rechner.html`** — konservativ, CPU/2:
+```
+workersByCpu  = max(2, floor(cpu / 2))          → bei 8 CPU: 4
+workersByRam  = floor((ram * 0.60 * 1024) / projMB)  → 60% RAM, 500 MB/Worker
+workersByUser = max(2, min(users, floor(cpu * 0.75)))
+workers       = min(alle drei)
+```
+
+**`Vereinfachter Worker-Rechner.html`** — aggressiver, cpu - 3:
+```
+maxByCpu = max(1, cpu - 3)                      → bei 8 CPU: 5, bei 16 CPU: 13
+reserved = OS(2) + Lizmap(1) + PG(2) = 5 GB
+maxByRam = floor((ram - reserved) / 1.5)         → 1.5 GB/Worker fest
+workers  = min(maxByCpu, maxByRam)
+```
+
+## Ergebnis bei gleichen Eingaben (8 CPU / 16 GB / PG aktiv)
+
+| Rechner | Workers |
+|---|---|
+| `worker_rechner.html` | **4** (cpu/2 = 4) |
+| `Vereinfachter` | **7** (cpu−3=5 vs (16−5)/1.5=7 → min=5) |
+
+**Hauptursachen der Divergenz:**
+1. `worker_rechner.html` teilt CPU durch 2 — der vereinfachte zieht nur 3 ab (viel grosszügiger)
+2. RAM-Modell unterschiedlich: 60 % für QGIS vs. feste Abzüge pro Dienst, andere MB-pro-Worker-Annahme (500 MB vs. 1500 MB)
+3. `worker_rechner.html` berücksichtigt zusätzlich die Nutzerzahl, der vereinfachte nicht
+
+Welche Formel ist "richtiger"? Das hängt von der Projektkomplexität ab. Der vereinfachte Rechner ist für leichte Projekte realistischer; `worker_rechner.html` ist konservativer und schützt besser vor RAM-Engpässen bei schweren QGIS-Projekten.
+
 ## Referenzen
 
 - [Lizmap Dokumentation](https://docs.lizmap.com/)
