@@ -25,9 +25,11 @@ Vollautomatische Installation und Diagnose eines **Lizmap Web Client + py-qgis-s
 | `install_lizmap_qgisserver_8cpu.sh` | Vollinstallation — voreingestellt für 8 CPU-Kerne (4 Worker) |
 | `install_lizmap_qgisserver_16cpu.sh` | Vollinstallation — voreingestellt für 16 CPU-Kerne (8 Worker) |
 | `check_installation.sh` | Diagnose + optionale Fehlerkorrektur (`--fix`) |
-| `backup_lizmap_system.sh` | Backup aller Konfigurationen und Daten |
+| `backup_lizmap_system.sh` | Backup aller Konfigurationen und Daten als `.tar.gz` nach `/root/` |
 
 Andere Hardware → [Worker Rechner](worker_rechner.html) öffnen, Werte berechnen lassen, dann `QGIS_WORKER_COUNT` im Skript-Header anpassen.
+
+> **Hinweis:** Sektion 10 (xRDP + XFCE4) lädt viele Pakete — Dauer je nach Verbindung 5–15 Minuten. Der Fortschritt wird angezeigt.
 
 ## Was wird installiert
 
@@ -96,6 +98,29 @@ sudo bash check_installation.sh --fix    # Prüfung + automatische Korrekturen
 ```
 
 Was geprüft wird: Systemdienste, py-qgisserver Status, `server.conf`, Nginx-Konfiguration, Lizmap API, PHP-Extensions, QGIS-Plugins, Verzeichnisse & Berechtigungen, PostgreSQL + PostGIS, Xvfb-Display.
+
+## Backup
+
+```bash
+sudo bash backup_lizmap_system.sh
+```
+
+Erstellt `/root/lizmap_backup_DATUM.tar.gz` mit:
+
+| Inhalt | Pfad |
+|---|---|
+| QGIS Server Konfiguration | `/srv/qgis/` (ohne Cache) |
+| QGIS Projekte | `/srv/data/` |
+| Lizmap Konfiguration | `/var/www/lizmap/lizmap/var/config/` |
+| Nginx Konfiguration | `/etc/nginx/sites-*`, `nginx.conf`, `lizmap-common.conf`, `ssl/` |
+| Supervisor Konfiguration | `/etc/supervisor/conf.d/` |
+| PHP Konfiguration | `/etc/php/8.3/fpm/` |
+| PostgreSQL Dump | `pg_dump lizmap` + Globals |
+| Systemd Units | `xvfb.service`, `qgis.service`, `qgis-server@*` |
+| xRDP Konfiguration | `/etc/xrdp/startwm.sh`, `xrdp.ini` |
+| System-Informationen | Pakete, Dienste, Plugin-Versionen |
+
+Am Ende zeigt das Skript den korrekten `scp`-Befehl mit der aktuellen Server-IP zum Herunterladen.
 
 ## QGIS-Plugins aktualisieren (Bestehendes System)
 
