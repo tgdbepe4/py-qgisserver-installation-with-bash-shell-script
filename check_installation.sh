@@ -294,7 +294,7 @@ else
     INFO "  → ${PYQGIS_VENV}/bin/pip install py-qgis-server"
     if $FIX_MODE; then
         FIX "Installiere py-qgis-server in venv ..."
-        apt-get install -y -qq python3-psutil python3-venv 2>/dev/null
+        apt-get install -y -q python3-psutil python3-venv 2>/dev/null
         python3 -m venv "${PYQGIS_VENV}" --system-site-packages
         "${PYQGIS_VENV}/bin/pip" install -q -U pip setuptools wheel pysocks typing_extensions
         "${PYQGIS_VENV}/bin/pip" install -q py-qgis-server

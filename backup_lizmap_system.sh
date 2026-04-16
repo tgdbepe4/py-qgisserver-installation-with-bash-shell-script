@@ -66,9 +66,11 @@ section "3. Nginx-Konfiguration"
 
 log "Sichere Nginx-Konfiguration ..."
 mkdir -p "${BACKUP_DIR}/etc/nginx"
-cp -a /etc/nginx/sites-available "${BACKUP_DIR}/etc/nginx/" 2>/dev/null || true
-cp -a /etc/nginx/sites-enabled   "${BACKUP_DIR}/etc/nginx/" 2>/dev/null || true
-cp    /etc/nginx/nginx.conf       "${BACKUP_DIR}/etc/nginx/" 2>/dev/null || true
+cp -a /etc/nginx/sites-available    "${BACKUP_DIR}/etc/nginx/" 2>/dev/null || true
+cp -a /etc/nginx/sites-enabled      "${BACKUP_DIR}/etc/nginx/" 2>/dev/null || true
+cp    /etc/nginx/nginx.conf         "${BACKUP_DIR}/etc/nginx/" 2>/dev/null || true
+cp    /etc/nginx/lizmap-common.conf "${BACKUP_DIR}/etc/nginx/" 2>/dev/null || true
+[ -d /etc/nginx/ssl ] && cp -a /etc/nginx/ssl "${BACKUP_DIR}/etc/nginx/" 2>/dev/null || true
 
 # =============================================================================
 section "4. Supervisor-Konfiguration"
@@ -185,8 +187,9 @@ echo -e "${GREEN}  Archiv:  ${BACKUP_TAR}${NC}"
 echo -e "${GREEN}  Grösse:  ${BACKUP_SIZE}${NC}"
 echo -e "${GREEN}=====================================================${NC}"
 echo ""
+SERVER_IP=$(hostname -I | awk '{print $1}')
 echo "Auf lokalem PC herunterladen:"
-echo "  scp root@65.21.3.77:${BACKUP_TAR} ."
+echo "  scp root@${SERVER_IP}:${BACKUP_TAR} ."
 echo ""
 echo "Wiederherstellen (nach Neuinstall):"
 echo "  scp lizmap_backup_*.tar.gz root@SERVER:~/"

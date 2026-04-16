@@ -1191,7 +1191,8 @@ log "Nginx configured."
 if [[ "$INSTALL_XRDP" == "true" ]]; then
     section "10. xRDP + XFCE4 desktop environment"
 
-    apt-get install -y -qq \
+    log "Installing xRDP + XFCE4 — this may take 5–15 minutes depending on your connection..."
+    apt-get install -y -q \
         xfce4 \
         xfce4-goodies \
         xfce4-terminal \
