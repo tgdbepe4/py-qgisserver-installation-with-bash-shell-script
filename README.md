@@ -99,6 +99,13 @@ sudo bash check_installation.sh --fix    # Prüfung + automatische Korrekturen
 
 Was geprüft wird: Systemdienste, py-qgisserver Status, `server.conf`, Nginx-Konfiguration, Lizmap API, PHP-Extensions, QGIS-Plugins, Verzeichnisse & Berechtigungen, PostgreSQL + PostGIS, Xvfb-Display.
 
+> **Hinweis:** `--fix` behebt einfache Konfigurations- und Berechtigungsfehler.
+> Bei komplexeren Problemen (fehlende Pakete, defekte venv, etc.) ist das erneute Ausführen
+> des Installationsskripts zuverlässiger — es ist **idempotent** und kann sicher wiederholt werden:
+> ```bash
+> sudo bash install_lizmap_qgisserver.sh
+> ```
+
 ## Backup
 
 ```bash

@@ -3,7 +3,12 @@
 # check_installation.sh — Diagnose-Script für Lizmap + py-qgis-server Stack
 # Ubuntu 24.04 LTS
 # Verwendung: sudo bash check_installation.sh
-#             sudo bash check_installation.sh --fix   (versucht Fehler zu beheben)
+#             sudo bash check_installation.sh --fix   (versucht einfache Fehler zu beheben)
+#
+# Hinweis: --fix behebt einfache Konfigurations- und Berechtigungsfehler.
+# Bei komplexen Problemen (fehlende Pakete, defekte venv, etc.) ist das
+# erneute Ausführen des Installationsskripts zuverlässiger:
+#   sudo bash install_lizmap_qgisserver.sh   (idempotent, sicher wiederholbar)
 # =============================================================================
 
 FIX_MODE=false
@@ -1003,8 +1008,17 @@ else
     echo -e "  ${RED}✗ ${ERRORS} Fehler  |  ${WARNINGS} Warnung(en)${NC}"
     echo ""
     if ! $FIX_MODE; then
-        echo -e "  ${CYAN}Tipp: sudo bash check_installation.sh --fix${NC}"
-        echo -e "  ${CYAN}      versucht Fehler automatisch zu beheben.${NC}"
+        echo -e "  ${CYAN}Tipp 1: sudo bash check_installation.sh --fix${NC}"
+        echo -e "  ${CYAN}        versucht einfache Fehler automatisch zu beheben.${NC}"
+        echo ""
+        echo -e "  ${CYAN}Tipp 2: Bleiben Fehler bestehen → Installationsskript erneut ausführen:${NC}"
+        echo -e "  ${CYAN}        sudo bash install_lizmap_qgisserver.sh${NC}"
+        echo -e "  ${CYAN}        Das Skript ist idempotent und kann sicher wiederholt werden.${NC}"
+    else
+        echo -e "  ${YELLOW}--fix konnte nicht alle Fehler beheben.${NC}"
+        echo -e "  ${YELLOW}Empfehlung: Installationsskript erneut ausführen:${NC}"
+        echo -e "  ${CYAN}  sudo bash install_lizmap_qgisserver.sh${NC}"
+        echo -e "  ${CYAN}  Das Skript ist idempotent und kann sicher wiederholt werden.${NC}"
     fi
 fi
 
