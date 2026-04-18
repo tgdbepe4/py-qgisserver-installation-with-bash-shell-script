@@ -742,16 +742,18 @@ systemctl enable supervisor
 systemctl restart supervisor
 log "py-qgis-server registered with Supervisor."
 
-# ---- 3liz Telemetrie blockieren (bourbon.3liz.com) ---------------------------
+# ---- 3liz Telemetrie prüfen (bourbon.3liz.com) -------------------------------
 # py-qgis-server sendet bei jeder Anfrage Telemetrie-Daten an bourbon.3liz.com.
-# Wenn der Server keinen Internetzugang hat oder die DNS-Auflösung langsam ist,
-# führt dies zu Timeouts von 6–16 Sekunden pro Anfrage (3× Retry à 2–5s).
-# Fix: Hostname in /etc/hosts auf 0.0.0.0 mappen → sofortige Ablehnung ohne Timeout.
+# Ist der Host nicht erreichbar, entstehen Timeouts von 6–16s pro Anfrage.
+# Fix wird nur angewendet wenn bourbon.3liz.com nicht erreichbar ist.
 if grep -q "bourbon.3liz.com" /etc/hosts; then
-    log "bourbon.3liz.com bereits in /etc/hosts blockiert."
+    log "bourbon.3liz.com bereits in /etc/hosts blockiert (kein erneuter Check)."
+elif curl -sf --max-time 2 --connect-timeout 2 https://bourbon.3liz.com/api/event \
+        -o /dev/null 2>/dev/null; then
+    log "bourbon.3liz.com erreichbar — kein /etc/hosts-Eintrag nötig."
 else
     echo "0.0.0.0 bourbon.3liz.com" >> /etc/hosts
-    log "bourbon.3liz.com blockiert via /etc/hosts (Telemetrie-Timeout-Fix)."
+    log "bourbon.3liz.com nicht erreichbar → in /etc/hosts blockiert (verhindert 6–16s Timeouts pro Anfrage)."
 fi
 
 # ---- qgis.service — meta service for "service qgis start/stop/restart" ------
