@@ -208,6 +208,50 @@ workers  = min(maxByCpu, maxByRam)
 
 Welche Formel ist "richtiger"? Das hängt von der Projektkomplexität ab. Der vereinfachte Rechner ist für leichte Projekte realistischer; `worker_rechner.html` ist konservativer und schützt besser vor RAM-Engpässen bei schweren QGIS-Projekten.
 
+## Bekannte Probleme und Lösungen
+
+### Langsame Anfragen / Timeouts (bourbon.3liz.com)
+
+py-qgis-server sendet bei jeder Karten-Anfrage Telemetrie-Daten an `bourbon.3liz.com`. Wenn der Server keinen stabilen Internetzugang hat, führt dies zu Timeouts von **6–16 Sekunden pro Anfrage** (3× Retry).
+
+**Symptome:** Karten laden sehr langsam, Nginx-Logs zeigen Lücken zwischen Anfragen.
+
+**Fix (bereits im Installationsskript enthalten):**
+
+```bash
+echo "0.0.0.0 bourbon.3liz.com" >> /etc/hosts
+supervisorctl restart py-qgisserver
+```
+
+Das Installationsskript führt diesen Fix automatisch aus.
+
+### Preload-Strategie (RAM-Engpass)
+
+Jedes preloaded QGIS-Projekt belegt ca. 500 MB – 2 GB RAM. Bei vielen Projekten im Preload kann der RAM erschöpft sein, **bevor** die ersten Anfragen ankommen.
+
+**Faustregel:** Maximal 2–3 Projekte pro Worker im Preload. Alle anderen Projekte werden beim ersten Zugriff geladen (~40 Sekunden auf schwacher Hardware).
+
+**Preload konfigurieren** (`/srv/qgis/config/preload_projects.txt`):
+```bash
+# Nur das wichtigste Projekt preloaden:
+/srv/data/hauptkarte.qgs
+```
+
+### Hardware-Empfehlungen
+
+QGIS Server ist CPU-intensiv. Zu schwache Hardware führt zu langen Ladezeiten und hoher CPU-Last.
+
+| Hardware | Eignung | Anmerkung |
+|---|---|---|
+| Intel Atom C2538 (2013) | Ungeeignet | ~550 Passmark, QGIS-Start >40s, dauerhaft hohe CPU-Last |
+| Intel N100 (2023) | Minimale Basis | ~3000 Passmark, für 1–2 gleichzeitige Nutzer |
+| AMD Ryzen 7 5800X | Gut | ~3800 Passmark/Kern, kurze Ladezeiten, mehrere Nutzer |
+| 16+ Kerne Server-CPU | Optimal | Für Produktionsbetrieb mit vielen Nutzern |
+
+**Mindestanforderung:** 4 CPU-Kerne mit >2000 Passmark pro Kern, 16 GB RAM.
+
+> **Tipp:** Passmark-Werte für eigene Hardware: [cpubenchmark.net](https://www.cpubenchmark.net/)
+
 ## Referenzen
 
 - [Lizmap Dokumentation](https://docs.lizmap.com/)
