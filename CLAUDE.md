@@ -46,7 +46,7 @@ eines **Lizmap Web Client + py-qgis-server**-Stacks auf **Ubuntu 24.04 LTS**.
 | QGIS Server LTR | via offiziellem QGIS apt-Repository |
 | QGIS Desktop LTR | für Projektbearbeitung via RDP |
 | py-qgis-server | 3liz Python WSGI-Wrapper für QGIS Server |
-| Lizmap Web Client | 3.9.7 |
+| Lizmap Web Client | 3.9.8 |
 | Nginx | mit PHP 8.3-FPM |
 | PostgreSQL + PostGIS | optional (Standard: aktiviert) |
 | pgAdmin4 Web | optional (unter `/pgadmin4`) |
@@ -61,7 +61,7 @@ Installation: primär via **qgis-plugin-manager** (3liz CLI), ZIP-Download als F
 
 | Plugin | Quelle |
 |---|---|
-| `lizmap_server` | github.com/3liz/qgis-server-lizmap-plugin |
+| `lizmap_server` | github.com/3liz/qgis-lizmap-server-plugin |
 | `atlasprint` | github.com/3liz/qgis-atlasprint |
 | `wfsOutputExtension` | github.com/3liz/qgis-wfsOutputExtension |
 
@@ -91,6 +91,96 @@ supervisorctl restart py-qgisserver
 
 > Falls `qgis-plugin-manager` nicht im PATH: `/opt/local/qgis-plugin-manager/bin/qgis-plugin-manager`
 
+### Lizmap Web Client aktualisieren (bestehendes System)
+
+**Nicht** das Install-Skript mit neuer `LIZMAP_VERSION` erneut auf einem laufenden System ausführen —
+Sektion 8 macht bei Versionswechsel ein `rm -rf "${LIZMAP_DIR}"` und schreibt `lizmapConfig.ini.php`,
+`localconfig.ini.php` und `profiles.ini.php` aus den `.dist`-Vorlagen neu (siehe
+`install_lizmap_qgisserver.sh`, Abschnitt "8. Lizmap Web Client"). Angepasste Konfiguration ginge
+dabei verloren. Stattdessen der offizielle Lizmap-Upgrade-Pfad:
+
+```bash
+# 1. Backup
+# Aus dem Repo-Verzeichnis ausführen (dort liegt backup_lizmap_system.sh),
+# z.B. ~/py-qgisserver-installation-with-bash-shell-script/ — nicht /var/www/lizmap!
+sudo bash backup_lizmap_system.sh
+
+# backup.sh legt das Zielverzeichnis NICHT selbst an — fehlt es, bricht es mit
+# "backup directory does not exists" ab, ohne etwas zu sichern.
+sudo mkdir -p /tmp/lizmap-backup
+cd /var/www/lizmap
+sudo bash lizmap/install/backup.sh /tmp/lizmap-backup
+
+# 2. Code austauschen, Konfiguration erhalten
+# Achtung Verschachtelung: das Release-Archiv enthält selbst nochmal einen lizmap/-Unterordner
+# mit dem eigentlichen Code (lizmap/install/, lizmap/var/, …) — genau wie LIZMAP_DIR im
+# Install-Skript intern auch relativ auf lizmap/var/config/… zugreift. Deshalb erst reinwechseln:
+cd /var/www
+mv lizmap lizmap.bak
+wget https://github.com/3liz/lizmap-web-client/releases/download/<NEUE_VERSION>/lizmap-web-client-<NEUE_VERSION>.zip
+unzip lizmap-web-client-<NEUE_VERSION>.zip
+mv lizmap-web-client-<NEUE_VERSION> lizmap
+cd lizmap                                                # ab hier: /var/www/lizmap
+sudo bash lizmap/install/restore.sh /tmp/lizmap-backup
+
+# Fallback, falls /tmp/lizmap-backup leer ist oder restore.sh mit
+# "backup directory does not exists" abbricht: solange lizmap.bak/ noch existiert,
+# liegt die echte Konfiguration dort unversehrt — direkt von dort zurückkopieren:
+#   cd /var/www
+#   sudo cp -Rp lizmap.bak/lizmap/var/db      lizmap/lizmap/var/
+#   sudo cp -Rp lizmap.bak/lizmap/var/config  lizmap/lizmap/var/
+#   [ -d lizmap.bak/lizmap/var/lizmap-theme-config ] && sudo cp -Rp lizmap.bak/lizmap/var/lizmap-theme-config lizmap/lizmap/var/
+#   [ -d lizmap.bak/lizmap/my-packages ]              && sudo cp -Rp lizmap.bak/lizmap/my-packages              lizmap/lizmap/
+#   [ -d lizmap.bak/lizmap/lizmap-modules ]           && sudo cp -Rp lizmap.bak/lizmap/lizmap-modules           lizmap/lizmap/
+
+# 3. Installer/Migrator (weiterhin in /var/www/lizmap)
+sudo lizmap/install/clean_vartmp.sh
+php lizmap/install/configurator.php
+php lizmap/install/installer.php
+sudo lizmap/install/clean_vartmp.sh
+sudo lizmap/install/set_rights.sh www-data www-data
+
+# set_rights.sh hat in der Praxis nicht immer alles erfasst — danach prüfen:
+#   lizmap/var/cache fehlte komplett (leer/nicht angelegt nach clean_vartmp.sh):
+sudo mkdir -p lizmap/var/cache/qgisprojects lizmap/var/cache/requests
+#   lizmap/var, lizmap/www, temp/ blieben root-owned (z.B. weil vorher als root unzip/cp lief):
+sudo chown -R www-data:www-data lizmap/var lizmap/www /var/www/lizmap/temp
+#   wmsServerType muss 'py-qgis-server' sein — nach Restore ggf. leer:
+grep -n "wmsServerType" lizmap/var/config/lizmapConfig.ini.php
+sed -i "s|wmsServerType=.*|wmsServerType=py-qgis-server|" lizmap/var/config/lizmapConfig.ini.php
+
+# 4. lizmap_server-Plugin auf passende Version bringen (siehe oben), dann py-qgis-server neu starten.
+# Vorher prüfen, welcher Mechanismus auf diesem Server tatsächlich läuft — nicht jede Installation
+# nutzt Supervisor (auf manchen Servern startet qgis.service qgisserver direkt via systemd,
+# User=root, ganz ohne Supervisor-Schicht):
+which supervisorctl && systemctl is-active supervisor
+supervisorctl restart py-qgisserver        # falls Supervisor vorhanden
+sudo systemctl restart qgis.service        # falls nicht (direkter systemd-Service)
+
+# 5. Dienste neu laden + prüfen
+systemctl reload php8.3-fpm nginx
+sudo bash check_installation.sh
+```
+
+> **Vorsicht mit `check_installation.sh --fix`:** Auf Servern, die von der Standard-Architektur
+> abweichen (kein Supervisor, andere Nginx-Struktur, `root` statt `qgis`-Systembenutzer), meldet das
+> Diagnoseskript teils vorbestehende, nicht update-bezogene Warnungen (Nginx-Vhost, PHP-Extensions,
+> xRDP, PostgreSQL, Verzeichnis-Owner). `--fix` ändert automatisiert Nginx/Rechte/Dienste — auf einem
+> laufenden produktiven Server jede Meldung einzeln bewerten statt pauschal zu fixen.
+
+Im Browser verifizieren (Login, Karte laden, `.../lizmap/admin/serverInformation` zeigt Lizmap-/QGIS-
+Server-/Plugin-Versionen auf einen Blick). Danach aufräumen:
+```bash
+rm -rf /var/www/lizmap.bak
+rm /root/lizmap_backup_*.tar.gz   # das backup_lizmap_system.sh-Archiv aus Schritt 1
+```
+
+Anschliessend `LIZMAP_VERSION` im Skript-Header aller Install-Skript-Varianten auf die neue Version
+anpassen, damit künftige Neuinstallationen den aktuellen Stand verwenden. Falls dabei auch QGIS Server
+auf eine neue Version gesprungen ist: `sources.list` für `qgis-plugin-manager` nachziehen (siehe oben,
+Abschnitt "QGIS Server Plugins") — ein reines `apt upgrade` von `qgis-server` aktualisiert diese Datei
+**nicht** automatisch, sie kann dadurch unbemerkt veraltet sein.
+
 ---
 
 ## Konfiguration
@@ -99,7 +189,7 @@ supervisorctl restart py-qgisserver
 
 | Variable | Standardwert | Beschreibung |
 |---|---|---|
-| `LIZMAP_VERSION` | `3.9.7` | Lizmap Web Client Version |
+| `LIZMAP_VERSION` | `3.9.8` | Lizmap Web Client Version |
 | `LIZMAP_DIR` | `/var/www/lizmap` | Installationspfad Lizmap |
 | `QGIS_PROJECTS_DIR` | `/srv/data` | Verzeichnis für QGIS-Projektdateien |
 | `QGIS_WORKER_COUNT` | `4` | Anzahl QGIS Server Worker-Instanzen |

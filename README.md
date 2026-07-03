@@ -129,7 +129,132 @@ Erstellt `/root/lizmap_backup_DATUM.tar.gz` mit:
 
 Am Ende zeigt das Skript den korrekten `scp`-Befehl mit der aktuellen Server-IP zum Herunterladen.
 
+## Lizmap Web Client aktualisieren (Bestehendes System)
+
+> **Wichtig:** Die Install-Skripte sind **nicht** zum Updaten einer laufenden Installation gedacht —
+> bei abweichender `LIZMAP_VERSION` wird `/var/www/lizmap` komplett gelöscht und die Konfiguration
+> (`lizmapConfig.ini.php`, `profiles.ini.php`, `localconfig.ini.php`) aus den `.dist`-Vorlagen neu
+> geschrieben. Angepasste Einstellungen gingen dabei verloren. Für ein Update auf einem produktiven
+> System stattdessen den offiziellen Lizmap-Upgrade-Weg verwenden:
+
+**1. Backup**
+
+> `backup.sh` legt das Zielverzeichnis **nicht selbst an** — fehlt es, bricht das Skript mit
+> `backup directory does not exists` ab, ohne etwas zu sichern. Vorher `mkdir -p` nicht vergessen.
+
+```bash
+# Aus dem Repo-Verzeichnis ausführen (dort liegt backup_lizmap_system.sh),
+# z.B. ~/py-qgisserver-installation-with-bash-shell-script/ — nicht /var/www/lizmap!
+sudo bash backup_lizmap_system.sh
+
+sudo mkdir -p /tmp/lizmap-backup
+cd /var/www/lizmap
+sudo bash lizmap/install/backup.sh /tmp/lizmap-backup   # sichert Config + DB (jauth.db, logs.db, *.ini.php)
+```
+
+**2. Code austauschen, Konfiguration erhalten**
+
+> Achtung Verschachtelung: Das Release-Archiv `lizmap-web-client-<VERSION>.zip` enthält selbst
+> nochmal einen `lizmap/`-Unterordner mit dem eigentlichen Code (`lizmap/install/`, `lizmap/var/`, …).
+> Nach `mv lizmap-web-client-<VERSION> lizmap` ist der echte Pfad also `/var/www/lizmap/lizmap/install/…`
+> — genau wie im Install-Skript (`LIZMAP_DIR` = `/var/www/lizmap`, Skript referenziert intern ebenfalls
+> `lizmap/var/config/…` relativ dazu). Deshalb unbedingt zuerst in den neuen Ordner wechseln:
+
+```bash
+cd /var/www
+mv lizmap lizmap.bak
+wget https://github.com/3liz/lizmap-web-client/releases/download/<NEUE_VERSION>/lizmap-web-client-<NEUE_VERSION>.zip
+unzip lizmap-web-client-<NEUE_VERSION>.zip
+mv lizmap-web-client-<NEUE_VERSION> lizmap
+cd lizmap                                                # ab hier: /var/www/lizmap
+sudo bash lizmap/install/restore.sh /tmp/lizmap-backup   # spielt Config + DB zurück
+```
+
+> **Fallback, falls `/tmp/lizmap-backup` leer ist oder `restore.sh` mit
+> `backup directory does not exists` abbricht:** Solange `lizmap.bak/` noch existiert, liegt die
+> echte Konfiguration dort unversehrt. Direkt von dort zurückkopieren statt über `/tmp`:
+> ```bash
+> cd /var/www
+> sudo cp -Rp lizmap.bak/lizmap/var/db      lizmap/lizmap/var/
+> sudo cp -Rp lizmap.bak/lizmap/var/config  lizmap/lizmap/var/
+> # Falls vorhanden (optional):
+> [ -d lizmap.bak/lizmap/var/lizmap-theme-config ] && sudo cp -Rp lizmap.bak/lizmap/var/lizmap-theme-config lizmap/lizmap/var/
+> [ -d lizmap.bak/lizmap/my-packages ]              && sudo cp -Rp lizmap.bak/lizmap/my-packages              lizmap/lizmap/
+> [ -d lizmap.bak/lizmap/lizmap-modules ]           && sudo cp -Rp lizmap.bak/lizmap/lizmap-modules           lizmap/lizmap/
+> ```
+
+**3. Installer/Migrator ausführen** (weiterhin in `/var/www/lizmap`)
+```bash
+sudo lizmap/install/clean_vartmp.sh
+php lizmap/install/configurator.php
+php lizmap/install/installer.php
+sudo lizmap/install/clean_vartmp.sh
+sudo lizmap/install/set_rights.sh www-data www-data
+```
+
+> **Danach prüfen, ob `set_rights.sh` wirklich alles erfasst hat** — in der Praxis blieb
+> `lizmap/var/cache` nach dem Update leer/fehlend und `lizmap/var`, `lizmap/www`, `temp/` weiterhin
+> `root`-owned (z.B. weil vorher als root ge-`unzip`t/kopiert wurde):
+> ```bash
+> sudo mkdir -p lizmap/var/cache/qgisprojects lizmap/var/cache/requests
+> sudo chown -R www-data:www-data lizmap/var lizmap/www /var/www/lizmap/temp
+> ```
+> Ausserdem `wmsServerType` in `lizmap/var/config/lizmapConfig.ini.php` prüfen — muss `py-qgis-server`
+> sein:
+> ```bash
+> grep -n "wmsServerType" lizmap/var/config/lizmapConfig.ini.php
+> sed -i "s|wmsServerType=.*|wmsServerType=py-qgis-server|" lizmap/var/config/lizmapConfig.ini.php
+> ```
+
+**4. `lizmap_server`-Plugin auf passende Version bringen** (siehe nächster Abschnitt), dann py-qgis-server
+neu starten. **Vorher prüfen, welcher Mechanismus auf diesem Server tatsächlich läuft** — nicht jede
+Installation nutzt Supervisor:
+```bash
+which supervisorctl && systemctl is-active supervisor
+```
+Falls das leer/inaktiv ist (z.B. `qgis.service` startet `qgisserver` direkt via systemd, `User=root`,
+ohne Supervisor-Schicht dazwischen):
+```bash
+sudo systemctl restart qgis.service
+```
+Falls Supervisor vorhanden ist:
+```bash
+supervisorctl restart py-qgisserver
+```
+
+**5. Dienste neu laden und prüfen**
+```bash
+systemctl reload php8.3-fpm nginx
+sudo bash check_installation.sh
+```
+> **Vorsicht mit `--fix`:** Auf Servern, die von der Standard-Architektur abweichen (z.B. kein
+> Supervisor, andere Nginx-Struktur, `root` statt `qgis`-Systembenutzer), listet das Diagnoseskript
+> teils vorbestehende, nicht update-bezogene Warnungen (Nginx-Vhost, PHP-Extensions, xRDP, PostgreSQL,
+> Verzeichnis-Owner). `--fix` automatisiert Änderungen an Nginx/Rechten/Diensten — vor dem Einsatz auf
+> einem produktiven, bereits laufenden Server jede Meldung einzeln bewerten statt pauschal zu fixen.
+
+Im Browser testen (Login, Karte laden, Serverinformationen-Seite `.../lizmap/admin/serverInformation`
+prüft Lizmap-/QGIS-Server-/Plugin-Versionen auf einen Blick). Danach aufräumen:
+```bash
+rm -rf /var/www/lizmap.bak
+rm /root/lizmap_backup_*.tar.gz   # das backup_lizmap_system.sh-Archiv aus Schritt 1
+```
+
+Anschliessend `LIZMAP_VERSION` im Skript-Header von `install_lizmap_qgisserver.sh` (und den CPU-Varianten)
+auf die neue Version anpassen, damit künftige Neuinstallationen die aktualisierte Version verwenden.
+
+Falls dabei auch QGIS Server auf eine neue Version gesprungen ist: `sources.list` für
+`qgis-plugin-manager` nachziehen (siehe nächster Abschnitt), sonst werden ggf. nicht die zur neuen
+QGIS-Version passenden Plugin-Versionen gefunden.
+
 ## QGIS-Plugins aktualisieren (Bestehendes System)
+
+> `sources.list` wird nur geschrieben, wenn dieser Block ausgeführt wird — ein reines
+> `apt upgrade` von `qgis-server` aktualisiert QGIS Server, aber **nicht** automatisch diese Datei.
+> Dadurch kann sie unbemerkt veraltet sein (in der Praxis beobachtet: `sources.list` zeigte noch
+> `qgis=3.34`, während QGIS Server längst auf `3.44` lief). Im Zweifel den tatsächlichen Stand über
+> die Lizmap-Seite `.../lizmap/admin/serverInformation` gegenprüfen und `sources.list` bei Abweichung
+> neu schreiben.
 
 ```bash
 QGIS_VER=$(dpkg -l qgis-server | awk '/^ii.*qgis-server /{print $3}' | grep -oP '\d+\.\d+' | head -1)
@@ -139,7 +264,7 @@ echo "https://plugins.qgis.org/plugins/plugins.xml?qgis=${QGIS_VER}" > /srv/qgis
 /opt/local/py-qgis-server/bin/qgis-plugin-manager update
 /opt/local/py-qgis-server/bin/qgis-plugin-manager upgrade
 
-supervisorctl restart py-qgisserver
+supervisorctl restart py-qgisserver   # oder: sudo systemctl restart qgis.service (falls kein Supervisor läuft)
 ```
 
 ## QGIS Stack steuern
