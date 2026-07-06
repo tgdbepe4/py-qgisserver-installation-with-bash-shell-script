@@ -1012,23 +1012,14 @@ else
     warn "lizmapConfig.ini.php not found — set wmsServerURL manually in Lizmap admin panel."
 fi
 
-# ---- localconfig.ini.php: disable FCGI wrapper warning ----------------------
-# Lizmap 3.9+ shows an informational banner "does not allow QGIS with FCGI"
-# on every page until the admin confirms py-qgis-server in localconfig.ini.php.
-# Setting wrapperCheckDisabled=true suppresses the banner (we ARE using
-# py-qgis-server, so the check is satisfied).
-LOCAL_CONFIG="${LIZMAP_DIR}/lizmap/var/config/localconfig.ini.php"
-if [ -f "${LOCAL_CONFIG}" ]; then
-    if ! grep -q "wrapperCheckDisabled" "${LOCAL_CONFIG}"; then
-        cat >> "${LOCAL_CONFIG}" <<'LOCALCFG'
-
-[modules]
-lizmap.installparam={"wrapperCheckDisabled":true}
-LOCALCFG
-        chown "${LIZMAP_USER}:${LIZMAP_GROUP}" "${LOCAL_CONFIG}"
-        log "localconfig.ini.php: wrapperCheckDisabled=true gesetzt (py-qgis-server wird verwendet)."
-    fi
-fi
+# ---- FCGI-Wrapper-Warnung ---------------------------------------------------
+# Lizmap 3.9+ zeigt eine Hinweisbox "does not allow QGIS with FCGI", bis es
+# py-qgis-server per Live-Metadaten (qgis_server_info.py_qgis_server.found)
+# selbst erkennt. Es gibt dafür keinen Config-Schlüssel zum manuellen
+# Abschalten der Prüfung ("wrapperCheckDisabled" existiert nicht im Lizmap-
+# Quellcode) — die Box verschwindet automatisch, sobald das lizmap_server-
+# Plugin (siehe install_lizmap_server_plugin oben) korrekt installiert ist
+# und py-qgis-server antwortet.
 
 # ---- Nginx configuration -----------------------------------------------------
 section "9. Nginx virtual host configuration"
