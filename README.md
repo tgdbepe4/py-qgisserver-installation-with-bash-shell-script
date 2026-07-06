@@ -89,7 +89,14 @@ export CERTBOT_EMAIL=du@example.com
 sudo -E bash install_lizmap_qgisserver_8cpu.sh
 ```
 
-Vorausgesetzt DNS für die Domain aus `SERVER_NAME` zeigt bereits auf den Server, läuft certbot dann vollautomatisch am Ende der Installation. Ohne gesetzte Variable wird HTTPS übersprungen (nur selbstsigniertes Zertifikat für IP-Zugriff) und kann jederzeit manuell nachgeholt werden: `sudo certbot --nginx -d deine-domain.example.com`.
+Vorausgesetzt DNS für die Domain aus `SERVER_NAME` zeigt bereits auf den Server, läuft certbot dann vollautomatisch am Ende der Installation.
+
+Wird `CERTBOT_EMAIL` **nicht** per Umgebungsvariable gesetzt, verhält sich das Skript je nach Umgebung unterschiedlich:
+
+- **Interaktiver Lauf mit Terminal** (auch `curl ... | sudo bash` in einer normalen SSH-Sitzung): Das Skript fragt am Ende kurz nach — `HTTPS via Let's Encrypt für '<domain>' einrichten? E-Mail eingeben (Enter = überspringen):`. Enter drücken überspringt HTTPS genau wie beim Setzen von nichts.
+- **Vollautomatisierter Lauf ohne Terminal** (z.B. aus einem Cron-Job oder CI-System ohne TTY): keine Rückfrage, HTTPS wird stillschweigend übersprungen — kein Hänger.
+
+In beiden Fällen bleibt nur das selbstsignierte Zertifikat für IP-Zugriff aktiv, und HTTPS kann jederzeit manuell nachgeholt werden: `sudo certbot --nginx -d deine-domain.example.com`.
 
 ## Nach der Installation
 

@@ -205,7 +205,7 @@ Abschnitt "QGIS Server Plugins") — ein reines `apt upgrade` von `qgis-server` 
 | `XRDP_PASS` | *(auto-generiert)* | RDP-Passwort — stabil bei Re-Run wenn als Env-Variable exportiert |
 | `XRDP_PORT` | `3389` | RDP-Port |
 | `INSTALL_SECURITY` | `true` | UFW + Fail2ban installieren (`true`/`false`) |
-| `CERTBOT_EMAIL` | *(leer, liest Env-Variable)* | E-Mail für Let's Encrypt — nicht im Skript editieren, per `export CERTBOT_EMAIL=... ; sudo -E bash ...` setzen. Leer = HTTPS überspringen |
+| `CERTBOT_EMAIL` | *(leer, liest Env-Variable)* | E-Mail für Let's Encrypt — nicht im Skript editieren, per `export CERTBOT_EMAIL=... ; sudo -E bash ...` setzen. Leer + Terminal vorhanden = interaktive Rückfrage; leer ohne Terminal = HTTPS überspringen. Siehe [HTTPS einrichten](#https-einrichten) |
 | `LOG_FILE` | `/var/log/install_lizmap_qgisserver.log` | Pfad zur Installationslogdatei |
 
 Passwörter bei Re-Run stabil halten:
@@ -403,6 +403,19 @@ Sektion 12 läuft dann vollautomatisch am Ende der Installation:
 3. Certbot modifiziert nur **Block 2** (Domain) — **Block 1** (IP/default_server) bleibt
    unberührt → `http://<IP>/` funktioniert weiterhin direkt, kein Fix nötig
 
+### Ohne gesetzte Umgebungsvariable
+
+Ist `CERTBOT_EMAIL` beim Start nicht gesetzt, verhält sich Sektion 12 je nach Umgebung:
+
+- **Terminal vorhanden** (interaktiver Lauf, auch `curl ... | sudo bash` in einer normalen
+  SSH-Sitzung): Rückfrage über `/dev/tty` (nicht stdin, das beim Piped-Aufruf durch das
+  Skript selbst belegt ist): `HTTPS via Let's Encrypt für '<domain>' einrichten? E-Mail
+  eingeben (Enter = überspringen):`. Enter überspringt HTTPS genau wie ganz ohne Variable.
+- **Kein Terminal** (vollautomatisierter Lauf ohne TTY, z.B. Cron/CI): keine Rückfrage,
+  HTTPS wird stillschweigend übersprungen — kein Hänger im unbeaufsichtigten Betrieb.
+
+In beiden Fällen bleibt nur das selbstsignierte Zertifikat für IP-Zugriff aktiv.
+
 ### Manuell (nachträglich)
 
 certbot und das nginx-Plugin sind bereits installiert:
@@ -461,7 +474,7 @@ Was geprüft wird:
 2. Via RDP (mstsc / Remmina) auf `<SERVER-IP>:3389` verbinden
 3. QGIS Desktop in der RDP-Session öffnen und `.qgs`/`.qgz` Projekte nach `/srv/data/` speichern
 4. Im QGIS Desktop das **Lizmap QGIS Plugin** installieren und pro Projekt Veröffentlichungsoptionen konfigurieren
-5. HTTPS: wird automatisch konfiguriert wenn `CERTBOT_EMAIL` als Umgebungsvariable gesetzt war. Sonst manuell nachholen:
+5. HTTPS: wird automatisch konfiguriert wenn `CERTBOT_EMAIL` als Umgebungsvariable gesetzt war, sonst bei interaktivem Lauf per Rückfrage am Skriptende (siehe [HTTPS einrichten](#https-einrichten)). Sonst manuell nachholen:
 ```bash
 certbot --nginx -d karte1.wandelderzeit.ch
 ```
