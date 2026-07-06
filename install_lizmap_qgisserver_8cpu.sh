@@ -29,7 +29,7 @@ set -uo pipefail
 # Every section uses explicit error checking and || true guards.
 
 # ---- CONFIGURABLE VARIABLES -------------------------------------------------
-LIZMAP_VERSION="3.9.8"
+LIZMAP_VERSION="3.9.9"
 LIZMAP_DIR="/var/www/lizmap"
 QGIS_PROJECTS_DIR="/srv/data"
 QGIS_WORKER_COUNT=4          # Number of QGIS Server worker instances (8 CPU: 4 Worker)

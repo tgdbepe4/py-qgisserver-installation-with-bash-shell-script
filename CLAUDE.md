@@ -46,7 +46,7 @@ eines **Lizmap Web Client + py-qgis-server**-Stacks auf **Ubuntu 24.04 LTS**.
 | QGIS Server LTR | via offiziellem QGIS apt-Repository |
 | QGIS Desktop LTR | für Projektbearbeitung via RDP |
 | py-qgis-server | 3liz Python WSGI-Wrapper für QGIS Server |
-| Lizmap Web Client | 3.9.8 |
+| Lizmap Web Client | 3.9.9 |
 | Nginx | mit PHP 8.3-FPM |
 | PostgreSQL + PostGIS | optional (Standard: aktiviert) |
 | pgAdmin4 Web | optional (unter `/pgadmin4`) |
@@ -189,7 +189,7 @@ Abschnitt "QGIS Server Plugins") — ein reines `apt upgrade` von `qgis-server` 
 
 | Variable | Standardwert | Beschreibung |
 |---|---|---|
-| `LIZMAP_VERSION` | `3.9.8` | Lizmap Web Client Version |
+| `LIZMAP_VERSION` | `3.9.9` | Lizmap Web Client Version |
 | `LIZMAP_DIR` | `/var/www/lizmap` | Installationspfad Lizmap |
 | `QGIS_PROJECTS_DIR` | `/srv/data` | Verzeichnis für QGIS-Projektdateien |
 | `QGIS_WORKER_COUNT` | `4` | Anzahl QGIS Server Worker-Instanzen |
