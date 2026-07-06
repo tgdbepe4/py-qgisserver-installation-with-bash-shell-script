@@ -539,16 +539,21 @@ install_qgis_plugin() {
     local extract_dir="/tmp/qgis_plugin_${name}_extract"
     # Bis zu 3 Versuche — transiente Netzwerk-/Rate-Limit-Fehler sonst
     # unbemerkt zu einer Installation ohne dieses Plugin.
-    local attempt ok=false
+    local attempt ok=false wget_rc file_type
     for attempt in 1 2 3; do
         rm -rf "${tmp_zip}" "${extract_dir}"
-        if wget -q --timeout=30 -O "${tmp_zip}" "${latest_url}" \
-           && unzip -q "${tmp_zip}" -d "${extract_dir}"; then
+        wget -q --timeout=30 -O "${tmp_zip}" "${latest_url}"
+        wget_rc=$?
+        if [ "${wget_rc}" -eq 0 ] && unzip -q "${tmp_zip}" -d "${extract_dir}"; then
             ok=true
             break
         fi
+        file_type=$(file -b "${tmp_zip}" 2>/dev/null)
+        warn "Plugin '${name}': Download/Entpacken fehlgeschlagen (Versuch ${attempt}/3) — wget_rc=${wget_rc} typ='${file_type:-leer}'"
+        if echo "${file_type}" | grep -qi "text\|json\|html\|ascii\|empty"; then
+            warn "Plugin '${name}':   Inhalt (erste 200 Zeichen): $(head -c 200 "${tmp_zip}" 2>/dev/null | tr '\n' ' ')"
+        fi
         if [ "${attempt}" -lt 3 ]; then
-            warn "Plugin '${name}': Download/Entpacken fehlgeschlagen (Versuch ${attempt}/3) — erneuter Versuch in 5s ..."
             sleep 5
         fi
     done
@@ -600,15 +605,22 @@ install_lizmap_server_plugin() {
         local url="$1"
         local label="$2"
         local attempt ok=false
+        local http_code curl_rc file_type
         for attempt in 1 2 3; do
-            if curl -L --silent --max-time 60 -o "${tmp_zip}" "${url}" \
-               && file "${tmp_zip}" | grep -qi "zip"; then
+            http_code=$(curl -L --silent --show-error --max-time 60 \
+                -w "%{http_code}" -o "${tmp_zip}" "${url}" 2>&1)
+            curl_rc=$?
+            if [ "${curl_rc}" -eq 0 ] && file "${tmp_zip}" | grep -qi "zip"; then
                 ok=true
                 break
             fi
+            file_type=$(file -b "${tmp_zip}" 2>/dev/null)
+            warn "lizmap_server: Download/ZIP-Prüfung fehlgeschlagen (${label}, Versuch ${attempt}/3) — curl_rc=${curl_rc} http_code=${http_code:-?} typ='${file_type:-leer}'"
+            if echo "${file_type}" | grep -qi "text\|json\|html\|ascii\|empty"; then
+                warn "lizmap_server:   Inhalt (erste 200 Zeichen): $(head -c 200 "${tmp_zip}" 2>/dev/null | tr '\n' ' ')"
+            fi
             rm -f "${tmp_zip}"
             if [ "${attempt}" -lt 3 ]; then
-                warn "lizmap_server: Download/ZIP-Prüfung fehlgeschlagen (${label}, Versuch ${attempt}/3) — erneuter Versuch in 5s ..."
                 sleep 5
             fi
         done
