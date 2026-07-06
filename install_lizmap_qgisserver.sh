@@ -1512,6 +1512,14 @@ for name in ${SERVER_NAME}; do
     fi
 done
 
+# Interaktive Rückfrage — nur wenn CERTBOT_EMAIL nicht schon per Env-Variable gesetzt
+# wurde, eine echte Domain gefunden wurde und ein Terminal zum Nachfragen verfügbar
+# ist (z.B. nicht bei "curl | sudo bash" ohne TTY oder vollautomatisierten Läufen).
+# stdin ist beim Piped-Aufruf durch das Skript selbst belegt, daher explizit /dev/tty.
+if [ -z "${CERTBOT_EMAIL}" ] && [ -n "${CERTBOT_DOMAIN}" ] && [ -r /dev/tty ]; then
+    read -r -p "HTTPS via Let's Encrypt für '${CERTBOT_DOMAIN}' einrichten? E-Mail eingeben (Enter = überspringen): " CERTBOT_EMAIL < /dev/tty || true
+fi
+
 if [ -z "${CERTBOT_EMAIL}" ]; then
     log "HTTPS skipped — CERTBOT_EMAIL not set. To enable HTTPS later:"
     log "  certbot --nginx -d ${CERTBOT_DOMAIN:-yourdomain.com}"
