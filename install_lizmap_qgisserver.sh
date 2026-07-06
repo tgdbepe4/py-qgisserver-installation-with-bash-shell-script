@@ -87,6 +87,7 @@ apt-get install -y -qq \
     lsb-release \
     wget \
     unzip \
+    file \
     git \
     software-properties-common \
     python3 \
@@ -548,7 +549,7 @@ install_qgis_plugin() {
             break
         fi
         file_type=$(file -b "${tmp_zip}" 2>/dev/null)
-        warn "Plugin '${name}': Download/Entpacken fehlgeschlagen (Versuch ${attempt}/3) — wget_rc=${wget_rc} typ='${file_type:-leer}'"
+        warn "Plugin '${name}': Download/Entpacken fehlgeschlagen (Versuch ${attempt}/3) — wget_rc=${wget_rc} typ='${file_type:-nicht ermittelbar, ist \"file\" installiert?}'"
         if echo "${file_type}" | grep -qi "text\|json\|html\|ascii\|empty"; then
             warn "Plugin '${name}':   Inhalt (erste 200 Zeichen): $(head -c 200 "${tmp_zip}" 2>/dev/null | tr '\n' ' ')"
         fi
@@ -614,7 +615,7 @@ install_lizmap_server_plugin() {
                 break
             fi
             file_type=$(file -b "${tmp_zip}" 2>/dev/null)
-            warn "lizmap_server: Download/ZIP-Prüfung fehlgeschlagen (${label}, Versuch ${attempt}/3) — curl_rc=${curl_rc} http_code=${http_code:-?} typ='${file_type:-leer}'"
+            warn "lizmap_server: Download/ZIP-Prüfung fehlgeschlagen (${label}, Versuch ${attempt}/3) — curl_rc=${curl_rc} http_code=${http_code:-?} typ='${file_type:-nicht ermittelbar, ist \"file\" installiert?}'"
             if echo "${file_type}" | grep -qi "text\|json\|html\|ascii\|empty"; then
                 warn "lizmap_server:   Inhalt (erste 200 Zeichen): $(head -c 200 "${tmp_zip}" 2>/dev/null | tr '\n' ' ')"
             fi
