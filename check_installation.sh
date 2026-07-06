@@ -809,22 +809,37 @@ fi
 section "9b. qgis-plugin-manager"
 # =============================================================================
 
-PYQGIS_VENV="/opt/local/py-qgis-server"
-PLUGIN_MGR_BIN="${PYQGIS_VENV}/bin/qgis-plugin-manager"
+# qgis-plugin-manager läuft in eigener venv (/opt/local/qgis-plugin-manager),
+# per Symlink erreichbar unter /usr/local/bin — gleiche Suchreihenfolge wie
+# im Installationsskript (Abschnitt 5c).
+PLUGIN_MGR_VENV="/opt/local/qgis-plugin-manager"
 SOURCES_LIST="${PLUGIN_DIR}/sources.list"
 
-# Binary vorhanden?
-if [ -x "${PLUGIN_MGR_BIN}" ]; then
-    PLUGIN_MGR_VER=$("${PLUGIN_MGR_BIN}" --version 2>/dev/null | grep -oP '[\d.]+' | head -1)
-    OK "qgis-plugin-manager installiert${PLUGIN_MGR_VER:+ (v${PLUGIN_MGR_VER})}"
+if [ -x "/usr/local/bin/qgis-plugin-manager" ]; then
+    PLUGIN_MGR_BIN="/usr/local/bin/qgis-plugin-manager"
+elif [ -x "${PLUGIN_MGR_VENV}/bin/qgis-plugin-manager" ]; then
+    PLUGIN_MGR_BIN="${PLUGIN_MGR_VENV}/bin/qgis-plugin-manager"
 else
-    fail "qgis-plugin-manager nicht gefunden: ${PLUGIN_MGR_BIN}"
-    INFO "  → ${PYQGIS_VENV}/bin/pip install qgis-plugin-manager"
+    PLUGIN_MGR_BIN=""
+fi
+
+# Binary vorhanden?
+if [ -n "${PLUGIN_MGR_BIN}" ]; then
+    PLUGIN_MGR_VER=$("${PLUGIN_MGR_BIN}" --version 2>/dev/null | grep -oP '[\d.]+' | head -1)
+    OK "qgis-plugin-manager installiert${PLUGIN_MGR_VER:+ (v${PLUGIN_MGR_VER})}: ${PLUGIN_MGR_BIN}"
+else
+    fail "qgis-plugin-manager nicht gefunden (weder /usr/local/bin noch ${PLUGIN_MGR_VENV}/bin)"
+    INFO "  → python3 -m venv ${PLUGIN_MGR_VENV} && ${PLUGIN_MGR_VENV}/bin/pip install qgis-plugin-manager"
     if $FIX_MODE; then
-        FIX "Installiere qgis-plugin-manager in venv ..."
-        "${PYQGIS_VENV}/bin/pip" install -q qgis-plugin-manager \
-            && OK "qgis-plugin-manager installiert" \
-            || warn "Installation fehlgeschlagen"
+        FIX "Installiere qgis-plugin-manager in eigener venv ..."
+        python3 -m venv "${PLUGIN_MGR_VENV}" 2>/dev/null
+        if "${PLUGIN_MGR_VENV}/bin/pip" install -q qgis-plugin-manager; then
+            ln -sf "${PLUGIN_MGR_VENV}/bin/qgis-plugin-manager" /usr/local/bin/qgis-plugin-manager
+            PLUGIN_MGR_BIN="/usr/local/bin/qgis-plugin-manager"
+            OK "qgis-plugin-manager installiert"
+        else
+            warn "Installation fehlgeschlagen"
+        fi
     fi
 fi
 
