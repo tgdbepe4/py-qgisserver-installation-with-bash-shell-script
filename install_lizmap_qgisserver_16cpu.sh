@@ -536,19 +536,31 @@ install_qgis_plugin() {
     fi
 
     local tmp_zip="/tmp/qgis_plugin_${name}.zip"
-    if ! wget -q --timeout=30 -O "${tmp_zip}" "${latest_url}"; then
-        warn "Failed to download plugin '${name}' from ${latest_url} — skipping."
-        return 0
-    fi
-    if ! unzip -q "${tmp_zip}" -d "/tmp/qgis_plugin_${name}_extract"; then
-        warn "Failed to unzip plugin '${name}' — skipping."
-        rm -f "${tmp_zip}"
+    local extract_dir="/tmp/qgis_plugin_${name}_extract"
+    # Bis zu 3 Versuche — transiente Netzwerk-/Rate-Limit-Fehler sonst
+    # unbemerkt zu einer Installation ohne dieses Plugin.
+    local attempt ok=false
+    for attempt in 1 2 3; do
+        rm -rf "${tmp_zip}" "${extract_dir}"
+        if wget -q --timeout=30 -O "${tmp_zip}" "${latest_url}" \
+           && unzip -q "${tmp_zip}" -d "${extract_dir}"; then
+            ok=true
+            break
+        fi
+        if [ "${attempt}" -lt 3 ]; then
+            warn "Plugin '${name}': Download/Entpacken fehlgeschlagen (Versuch ${attempt}/3) — erneuter Versuch in 5s ..."
+            sleep 5
+        fi
+    done
+    if ! ${ok}; then
+        warn "Plugin '${name}': Download/Entpacken nach 3 Versuchen fehlgeschlagen — skipping."
+        rm -rf "${tmp_zip}" "${extract_dir}"
         return 0
     fi
 
     # The archive extracts to <repo>-<version>/ or <zip_name>/ — find it
     local extracted_dir
-    extracted_dir=$(find "/tmp/qgis_plugin_${name}_extract" -mindepth 1 -maxdepth 1 -type d | head -1)
+    extracted_dir=$(find "${extract_dir}" -mindepth 1 -maxdepth 1 -type d | head -1)
 
     # If the plugin code is inside a subdirectory (e.g. src/plugin_name/)
     if [ -n "${zip_name}" ] && [ -d "${extracted_dir}/${zip_name}" ]; then
@@ -557,7 +569,7 @@ install_qgis_plugin() {
         mv "${extracted_dir}" "/srv/qgis/plugins/${name}"
     fi
 
-    rm -rf "${tmp_zip}" "/tmp/qgis_plugin_${name}_extract"
+    rm -rf "${tmp_zip}" "${extract_dir}"
     log "Plugin '${name}' installed at /srv/qgis/plugins/${name}"
 }
 
@@ -580,15 +592,28 @@ install_lizmap_server_plugin() {
     rm -rf "${tmp_zip}" "${tmp_dir}"
 
     # Hilfsfunktion: Zip entpacken, lizmap_server-Verzeichnis finden und installieren
+    # Download + ZIP-Prüfung werden bis zu 3x versucht — GitHub/plugins.qgis.org
+    # antworten gelegentlich transient mit einer Fehlerseite statt dem Archiv
+    # (z.B. Rate-Limit), was sonst eine sonst funktionierende Installation
+    # lautlos ohne das Plugin durchlaufen lässt.
     try_install_from_zip() {
         local url="$1"
         local label="$2"
-        if ! curl -L --silent --max-time 60 -o "${tmp_zip}" "${url}"; then
-            warn "lizmap_server: Download fehlgeschlagen (${label})"
-            return 1
-        fi
-        if ! file "${tmp_zip}" | grep -qi "zip"; then
-            warn "lizmap_server: Kein gültiges ZIP (${label})"
+        local attempt ok=false
+        for attempt in 1 2 3; do
+            if curl -L --silent --max-time 60 -o "${tmp_zip}" "${url}" \
+               && file "${tmp_zip}" | grep -qi "zip"; then
+                ok=true
+                break
+            fi
+            rm -f "${tmp_zip}"
+            if [ "${attempt}" -lt 3 ]; then
+                warn "lizmap_server: Download/ZIP-Prüfung fehlgeschlagen (${label}, Versuch ${attempt}/3) — erneuter Versuch in 5s ..."
+                sleep 5
+            fi
+        done
+        if ! ${ok}; then
+            warn "lizmap_server: Kein gültiges ZIP nach 3 Versuchen (${label})"
             return 1
         fi
         unzip -q "${tmp_zip}" -d "${tmp_dir}" 2>/dev/null || true
