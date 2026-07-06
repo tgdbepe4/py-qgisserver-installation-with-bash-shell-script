@@ -852,12 +852,11 @@ if [ -f "${SOURCES_LIST}" ]; then
     elif [ -z "${SOURCES_CONTENT}" ]; then
         fail "sources.list ist leer oder enthält nur Kommentare"
         INFO "  → QGIS-Version ermitteln und sources.list neu schreiben:"
-        INFO "    QGIS_VER=\$(dpkg -l qgis-server | awk '/^ii.*qgis-server /{print \$3}' | grep -oP '\\d+\\.\\d+' | head -1)"
+        INFO "    QGIS_VER=\$(dpkg-query -W -f='\${Version}\\n' qgis-server | grep -oP '\\d+\\.\\d+' | head -1)"
         INFO "    echo \"https://plugins.qgis.org/plugins/plugins.xml?qgis=\${QGIS_VER}\" > ${SOURCES_LIST}"
         if $FIX_MODE; then
             FIX "Schreibe sources.list neu ..."
-            QGIS_VER=$(dpkg -l qgis-server 2>/dev/null \
-                | awk '/^ii.*qgis-server /{print $3}' \
+            QGIS_VER=$(dpkg-query -W -f='${Version}\n' qgis-server 2>/dev/null \
                 | grep -oP '\d+\.\d+' | head -1)
             if [ -n "${QGIS_VER}" ]; then
                 echo "https://plugins.qgis.org/plugins/plugins.xml?qgis=${QGIS_VER}" \
@@ -870,12 +869,11 @@ if [ -f "${SOURCES_LIST}" ]; then
     else
         warn "sources.list vorhanden aber URL enthält keine QGIS-Version (?qgis=X.Y)"
         INFO "  Aktueller Inhalt: ${SOURCES_CONTENT}"
-        INFO "  → QGIS_VER=\$(dpkg -l qgis-server | awk '/^ii.*qgis-server /{print \$3}' | grep -oP '\\d+\\.\\d+' | head -1)"
+        INFO "  → QGIS_VER=\$(dpkg-query -W -f='\${Version}\\n' qgis-server | grep -oP '\\d+\\.\\d+' | head -1)"
         INFO "    echo \"https://plugins.qgis.org/plugins/plugins.xml?qgis=\${QGIS_VER}\" > ${SOURCES_LIST}"
         if $FIX_MODE; then
             FIX "Korrigiere sources.list ..."
-            QGIS_VER=$(dpkg -l qgis-server 2>/dev/null \
-                | awk '/^ii.*qgis-server /{print $3}' \
+            QGIS_VER=$(dpkg-query -W -f='${Version}\n' qgis-server 2>/dev/null \
                 | grep -oP '\d+\.\d+' | head -1)
             if [ -n "${QGIS_VER}" ]; then
                 echo "https://plugins.qgis.org/plugins/plugins.xml?qgis=${QGIS_VER}" \
@@ -888,12 +886,11 @@ if [ -f "${SOURCES_LIST}" ]; then
     fi
 else
     fail "sources.list fehlt: ${SOURCES_LIST}"
-    INFO "  → QGIS_VER=\$(dpkg -l qgis-server | awk '/^ii.*qgis-server /{print \$3}' | grep -oP '\\d+\\.\\d+' | head -1)"
+    INFO "  → QGIS_VER=\$(dpkg-query -W -f='\${Version}\\n' qgis-server | grep -oP '\\d+\\.\\d+' | head -1)"
     INFO "    echo \"https://plugins.qgis.org/plugins/plugins.xml?qgis=\${QGIS_VER}\" > ${SOURCES_LIST}"
     if $FIX_MODE; then
         FIX "Erstelle sources.list ..."
-        QGIS_VER=$(dpkg -l qgis-server 2>/dev/null \
-            | awk '/^ii.*qgis-server /{print $3}' \
+        QGIS_VER=$(dpkg-query -W -f='${Version}\n' qgis-server 2>/dev/null \
             | grep -oP '\d+\.\d+' | head -1)
         if [ -n "${QGIS_VER}" ]; then
             echo "https://plugins.qgis.org/plugins/plugins.xml?qgis=${QGIS_VER}" \

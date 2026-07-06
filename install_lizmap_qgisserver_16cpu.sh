@@ -482,8 +482,11 @@ if [ -n "${PLUGIN_MGR_BIN}" ]; then
     log "qgis-plugin-manager verfügbar — verwende Plugin-Manager als primäre Methode."
     export QGIS_PLUGINPATH=/srv/qgis/plugins
     # QGIS-Version für plugins.qgis.org ermitteln (URL braucht ?qgis=X.Y als Parameter)
+    # dpkg-query -f liefert den reinen Versionsstring ohne Tabellenformatierung —
+    # dpkg -l bricht/kürzt Spalten je nach (fehlender) Terminalbreite ab, was beim
+    # Skriptlauf ohne TTY (z.B. curl | bash) das awk-Spaltenfeld unzuverlässig macht.
     # Epoch-Präfix "1:" in der dpkg-Version muss entfernt werden, daher grep auf \d+\.\d+ mitten im String
-    QGIS_VER=$(dpkg -l qgis-server 2>/dev/null | awk '/^ii.*qgis-server /{print $3}' \
+    QGIS_VER=$(dpkg-query -W -f='${Version}\n' qgis-server 2>/dev/null \
                | grep -oP '\d+\.\d+' | head -1)
     if [ -n "${QGIS_VER}" ]; then
         log "QGIS Version erkannt: ${QGIS_VER}"
