@@ -429,6 +429,26 @@ Fix für den IP-Zugriff nötig. `http://<IP>/` bleibt nach certbot weiterhin err
 
 ---
 
+## xRDP: weitere Benutzer anlegen
+
+Der Standard-RDP-Benutzer (`XRDP_USER`, siehe [Konfiguration](#konfiguration)) wird vom
+Installationsskript vollständig eingerichtet (Gruppen `sudo`/`xrdp`/`qgis`, XFCE4-Session-
+Konfiguration). Legt man **danach** manuell einen weiteren Benutzer an (z.B. per `adduser`),
+reicht das allein nicht — die RDP-Sitzung startet für diesen Benutzer nicht. Zusätzlich nötig:
+
+```bash
+sudo adduser rdpuser
+sudo passwd rdpuser
+echo "xfce4-session" > /home/rdpuser/.xsession
+sudo chown rdpuser:rdpuser /home/rdpuser/.xsession
+```
+
+Die Datei `~/.xsession` legt die Desktop-Sitzung für diesen Benutzer explizit auf XFCE4 fest.
+Ohne sie versucht xrdp/Xsession eine Sitzung anders zu bestimmen, was hier zu einer
+nicht startenden RDP-Sitzung führte — getestet und bestätigt auf dem produktiven Server.
+
+---
+
 ## Diagnose
 
 ```bash

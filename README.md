@@ -105,6 +105,9 @@ In beiden Fällen bleibt nur das selbstsignierte Zertifikat für IP-Zugriff akti
 3. QGIS Desktop in der RDP-Session öffnen → `.qgs`/`.qgz` Projekte nach `/srv/data/` speichern
 4. Im QGIS Desktop das **Lizmap QGIS Plugin** installieren und Veröffentlichungsoptionen pro Projekt konfigurieren
 
+**Weitere RDP-Benutzer:** Ein einfaches `adduser` reicht nicht — die RDP-Sitzung startet sonst
+nicht. Zusätzlich `~/.xsession` mit `xfce4-session` anlegen, siehe [CLAUDE.md](CLAUDE.md#xrdp-weitere-benutzer-anlegen).
+
 ## Diagnose
 
 ```bash
