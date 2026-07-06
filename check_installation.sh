@@ -749,7 +749,7 @@ fix_install_plugin() {
 
 declare -A PLUGIN_GHREPO=(
     [atlasprint]="3liz/qgis-atlasprint"
-    [lizmap_server]="3liz/qgis-server-lizmap-plugin"
+    [lizmap_server]="3liz/qgis-lizmap-server-plugin"
     [wfsOutputExtension]="3liz/qgis-wfsOutputExtension"
 )
 declare -A PLUGIN_QGISURL=(

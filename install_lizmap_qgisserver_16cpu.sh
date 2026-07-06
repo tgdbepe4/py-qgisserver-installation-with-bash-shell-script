@@ -29,7 +29,7 @@ set -uo pipefail
 # Every section uses explicit error checking and || true guards.
 
 # ---- CONFIGURABLE VARIABLES -------------------------------------------------
-LIZMAP_VERSION="3.9.7"
+LIZMAP_VERSION="3.9.9"
 LIZMAP_DIR="/var/www/lizmap"
 QGIS_PROJECTS_DIR="/srv/data"
 QGIS_WORKER_COUNT=8          # Number of QGIS Server worker instances (16 CPU: 8 Worker)
@@ -621,7 +621,7 @@ install_lizmap_server_plugin() {
     local _curl_auth=()
     [ -n "${GITHUB_TOKEN:-}" ] && _curl_auth=(-H "Authorization: token ${GITHUB_TOKEN}")
     gh_url=$(curl -s --max-time 15 "${_curl_auth[@]}" \
-        "https://api.github.com/repos/3liz/qgis-server-lizmap-plugin/releases/latest" \
+        "https://api.github.com/repos/3liz/qgis-lizmap-server-plugin/releases/latest" \
         | grep '"browser_download_url"' | grep '\.zip"' | head -1 \
         | sed 's/.*"browser_download_url": "\(.*\)"/\1/')
     if [ -n "${gh_url}" ]; then
@@ -630,7 +630,7 @@ install_lizmap_server_plugin() {
 
     # Methode 2: GitHub master branch
     try_install_from_zip \
-        "https://github.com/3liz/qgis-server-lizmap-plugin/archive/refs/heads/master.zip" \
+        "https://github.com/3liz/qgis-lizmap-server-plugin/archive/refs/heads/master.zip" \
         "GitHub master" && return
 
     # Methode 3: QGIS Plugin Repository (Fallback mit bekannter stabiler Version)
@@ -642,7 +642,7 @@ install_lizmap_server_plugin() {
 
     warn "lizmap_server: Alle Download-Methoden fehlgeschlagen!"
     warn "Manuell installieren:"
-    warn "  curl -L -o /tmp/lzm.zip https://github.com/3liz/qgis-server-lizmap-plugin/archive/refs/heads/master.zip"
+    warn "  curl -L -o /tmp/lzm.zip https://github.com/3liz/qgis-lizmap-server-plugin/archive/refs/heads/master.zip"
     warn "  unzip /tmp/lzm.zip -d /tmp/lzm_ex && mv /tmp/lzm_ex/*/lizmap_server /srv/qgis/plugins/"
 }
 
