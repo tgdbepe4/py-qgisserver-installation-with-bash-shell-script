@@ -56,7 +56,8 @@ Andere Hardware → [Worker Rechner](worker_rechner.html) öffnen, Werte berechn
 git clone https://github.com/tgdbepe4/py-qgisserver-installation-with-bash-shell-script
 cd py-qgisserver-installation-with-bash-shell-script
 
-# Variablen im Skript-Header anpassen (SERVER_NAME, CERTBOT_EMAIL, QGIS_WORKER_COUNT, …):
+# Variablen im Skript-Header anpassen (SERVER_NAME, QGIS_WORKER_COUNT, …):
+# CERTBOT_EMAIL NICHT hier eintragen — siehe Abschnitt "Konfiguration" unten (Umgebungsvariable).
 nano install_lizmap_qgisserver_8cpu.sh    # für 8 CPU-Kerne
 # oder
 nano install_lizmap_qgisserver_16cpu.sh   # für 16 CPU-Kerne
@@ -76,12 +77,19 @@ QGIS_WORKER_COUNT=4                          # Worker-Prozesse (≈ CPU-Kerne ÷
 INSTALL_POSTGRESQL=true                      # PostgreSQL + PostGIS
 INSTALL_XRDP=true                            # Remote Desktop
 INSTALL_SECURITY=true                        # UFW + Fail2ban
-CERTBOT_EMAIL=""                             # E-Mail → HTTPS automatisch aktivieren
+CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"           # E-Mail → HTTPS automatisch aktivieren
 ```
 
 **Worker-Anzahl:** `QGIS_WORKER_COUNT` im Skript-Header setzen — das Skript schreibt diesen Wert in `/srv/qgis/server.conf`. Das ist die einzige Stelle, an der die Worker-Anzahl konfiguriert wird (kein `-w` Flag im Supervisor). Siehe [anleitung_worker.md](anleitung_worker.md) und [worker_rechner.html](worker_rechner.html).
 
-Wenn `CERTBOT_EMAIL` gesetzt ist, läuft certbot vollautomatisch am Ende der Installation.
+**HTTPS/Let's Encrypt:** `CERTBOT_EMAIL` liest standardmäßig eine Umgebungsvariable — nicht im Skript editieren, sondern beim Aufruf mitgeben, damit die E-Mail-Adresse nicht im Repo landet:
+
+```bash
+export CERTBOT_EMAIL=du@example.com
+sudo -E bash install_lizmap_qgisserver_8cpu.sh
+```
+
+Vorausgesetzt DNS für die Domain aus `SERVER_NAME` zeigt bereits auf den Server, läuft certbot dann vollautomatisch am Ende der Installation. Ohne gesetzte Variable wird HTTPS übersprungen (nur selbstsigniertes Zertifikat für IP-Zugriff) und kann jederzeit manuell nachgeholt werden: `sudo certbot --nginx -d deine-domain.example.com`.
 
 ## Nach der Installation
 

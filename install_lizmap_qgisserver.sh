@@ -44,8 +44,10 @@ XRDP_USER="gisadmin"          # Dedicated RDP user (created if missing)
 XRDP_PASS="${XRDP_PASS:-GisAdmin_$(openssl rand -hex 4)}"  # Auto-generated, shown at end
 XRDP_PORT=3389
 INSTALL_SECURITY=true         # Set to false to skip UFW + Fail2ban hardening
-CERTBOT_EMAIL=""              # Set to your email to enable automatic HTTPS via Let's Encrypt
-                              # Leave empty to skip certbot (configure manually later)
+CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"  # Set via env var to enable automatic HTTPS via Let's Encrypt:
+                              #   export CERTBOT_EMAIL=you@example.com
+                              #   curl -s <raw-script-url> | sudo -E bash
+                              # Leave unset to skip certbot (configure manually later)
 LOG_FILE="/var/log/install_lizmap_qgisserver.log"
 # -----------------------------------------------------------------------------
 

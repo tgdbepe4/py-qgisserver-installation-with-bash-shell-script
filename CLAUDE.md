@@ -205,7 +205,7 @@ Abschnitt "QGIS Server Plugins") — ein reines `apt upgrade` von `qgis-server` 
 | `XRDP_PASS` | *(auto-generiert)* | RDP-Passwort — stabil bei Re-Run wenn als Env-Variable exportiert |
 | `XRDP_PORT` | `3389` | RDP-Port |
 | `INSTALL_SECURITY` | `true` | UFW + Fail2ban installieren (`true`/`false`) |
-| `CERTBOT_EMAIL` | *(leer)* | E-Mail für Let's Encrypt — leer = HTTPS überspringen |
+| `CERTBOT_EMAIL` | *(leer, liest Env-Variable)* | E-Mail für Let's Encrypt — nicht im Skript editieren, per `export CERTBOT_EMAIL=... ; sudo -E bash ...` setzen. Leer = HTTPS überspringen |
 | `LOG_FILE` | `/var/log/install_lizmap_qgisserver.log` | Pfad zur Installationslogdatei |
 
 Passwörter bei Re-Run stabil halten:
@@ -388,8 +388,15 @@ systemctl status xvfb
 
 ### Automatisch (empfohlen)
 
-`CERTBOT_EMAIL` im Skript-Header setzen, dann Skript ausführen. Sektion 12 läuft dann
-vollautomatisch am Ende der Installation:
+`CERTBOT_EMAIL` als Umgebungsvariable setzen (nicht im Skript-Header editieren), dann Skript
+mit `sudo -E` ausführen, z.B.:
+
+```bash
+export CERTBOT_EMAIL=du@example.com
+curl -s <raw-script-url> | sudo -E bash
+```
+
+Sektion 12 läuft dann vollautomatisch am Ende der Installation:
 
 1. Erste Nicht-localhost-Domain aus `SERVER_NAME` wird als Zieldomain verwendet
 2. `certbot --nginx -d <domain> --non-interactive --agree-tos` wird aufgerufen
@@ -454,7 +461,7 @@ Was geprüft wird:
 2. Via RDP (mstsc / Remmina) auf `<SERVER-IP>:3389` verbinden
 3. QGIS Desktop in der RDP-Session öffnen und `.qgs`/`.qgz` Projekte nach `/srv/data/` speichern
 4. Im QGIS Desktop das **Lizmap QGIS Plugin** installieren und pro Projekt Veröffentlichungsoptionen konfigurieren
-5. HTTPS: wird automatisch konfiguriert wenn `CERTBOT_EMAIL` im Skript gesetzt war. Sonst manuell nachholen:
+5. HTTPS: wird automatisch konfiguriert wenn `CERTBOT_EMAIL` als Umgebungsvariable gesetzt war. Sonst manuell nachholen:
 ```bash
 certbot --nginx -d karte1.wandelderzeit.ch
 ```
