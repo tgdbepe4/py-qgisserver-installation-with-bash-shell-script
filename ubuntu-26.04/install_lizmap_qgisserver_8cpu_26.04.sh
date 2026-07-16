@@ -321,17 +321,17 @@ section "5. py-qgis-server installation"
 # bindings (python3-qgis, PyQGIS) installed via apt remain accessible.
 # This is the approach documented at docs.lizmap.com/3.9/en/install/py-qgis-server.html
 #
-# HINWEIS 26.04: Ubuntu 26.04 bringt standardmäßig Python 3.14 mit — deutlich
-# neuer als das 3.12 unter 24.04. py-qgis-server und qgis-plugin-manager sind
-# reine PyPI-Pakete ohne Ubuntu-Versionsbindung, sollten also grundsätzlich
-# funktionieren, sofern für 3.14 bereits kompatible Wheels/Abhängigkeiten
-# vorliegen. Das war zum Zeitpunkt der Skripterstellung nicht abschließend
-# geprüft — nach der Installation kurz verifizieren:
-#   /opt/local/py-qgis-server/bin/pip check
-#   /opt/local/py-qgis-server/bin/python -c "import qgis.server"
-# Bei Fehlern hilft oft ein Downgrade der venv auf Python 3.12/3.13 via
-# python3.12 -m venv ... (python3.12 ggf. zusätzlich installieren:
-# apt-get install -y python3.12 python3.12-venv).
+# HINWEIS 26.04: Ubuntu 26.04 bringt standardmäßig Python 3.14 mit. Bestätigtes
+# Problem: Python 3.14 hat den multiprocessing-Default auf Linux von "fork" auf
+# "forkserver" umgestellt (CPython gh-84559). py-qgis-server (Build 202506101134)
+# verlässt sich beim Worker-Start auf fork-Semantik und crasht unter forkserver
+# mit "KeyError: projects.cache" (Worker startet als frischer Interpreter statt
+# das vom Broker geladene Config-Objekt zu erben). Der Fix dafür wird weiter
+# unten automatisch angewendet (multiprocessing-Startmethode im
+# qgisserver-Entry-Point-Script fest auf "fork" gesetzt).
+# Ein Downgrade der venv auf Python 3.12/3.13 ist KEINE praktikable Alternative:
+# --system-site-packages bindet die venv an die PyQGIS-Bindings, die von Ubuntu
+# fest gegen die System-Python-Version (3.14) kompiliert sind.
 apt-get install -y -qq python3-psutil python3-venv
 
 python3 -m venv /opt/local/py-qgis-server --system-site-packages
@@ -339,6 +339,26 @@ python3 -m venv /opt/local/py-qgis-server --system-site-packages
 /opt/local/py-qgis-server/bin/pip install -q py-qgis-server \
     || { /opt/local/py-qgis-server/bin/pip install py-qgis-server; \
          error "pip install py-qgis-server fehlgeschlagen — Abbruch."; }
+
+# ---- Fix: Python 3.14 multiprocessing-Default (forkserver statt fork) ------
+# Python 3.14 (Standard auf Ubuntu 26.04) hat den multiprocessing-Default von
+# "fork" auf "forkserver" umgestellt (CPython gh-84559). py-qgis-server
+# (Stand: Build 202506101134 / commit 1565a8e) verlaesst sich beim
+# Worker-Start auf fork-Semantik: der Broker liest server.conf ein, und mit
+# fork erbt jeder Worker-Subprozess dieses Config-Objekt automatisch im
+# Speicher. Mit forkserver startet der Worker als frischer Interpreter, der
+# die Konfiguration nie neu einliest -> Crash mit "KeyError: projects.cache".
+# Fix: multiprocessing-Startmethode direkt im qgisserver-Entry-Point-Script
+# fest auf "fork" erzwingen -- zuverlaessiger als sitecustomize.py, das je
+# nach --system-site-packages-Pfadreihenfolge uebergangen werden kann
+# (in der Praxis beobachtet: sitecustomize.py griff nicht, dieser Fix schon).
+QGISSERVER_BIN="/opt/local/py-qgis-server/bin/qgisserver"
+if [ -f "${QGISSERVER_BIN}" ] && ! grep -q "set_start_method" "${QGISSERVER_BIN}"; then
+    sed -i "1a import multiprocessing\nmultiprocessing.set_start_method(\"fork\", force=True)" "${QGISSERVER_BIN}"
+    log "qgisserver: multiprocessing-Startmethode auf fork fixiert (Python 3.14 forkserver-Workaround)."
+else
+    log "qgisserver: multiprocessing-Fix bereits vorhanden oder Binary nicht gefunden - uebersprungen."
+fi
 
 # qgis-plugin-manager in eigene isolierte venv installieren (PEP 668 -- system-managed Python, gilt auch unter 26.04).
 # Eigene venv verhindert Dependency-Konflikte mit py-qgis-server.
