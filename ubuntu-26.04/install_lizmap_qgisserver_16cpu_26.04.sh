@@ -16,9 +16,13 @@
 #   - Lizmap Web Client (see LIZMAP_VERSION below)
 #   - Nginx + PHP-FPM
 #   - PostgreSQL + PostGIS (optional)
-#   - pgAdmin4 Desktop (optional, via RDP)
-#   - xRDP + XFCE4 desktop (optional, remote desktop access on port 3389)
-#   - Firefox (native .deb via Mozilla PPA)
+#   - GNOME Remote Desktop (nativer RDP-Server, optional, Port 3389) — KEIN
+#     xfce4, KEIN xrdp-Paket. Nutzt das auf der Maschine bereits vorhandene
+#     Ubuntu Desktop (GNOME). Siehe INSTALL_GNOME_RDP unten.
+#   - pgAdmin4 Desktop (optional, nutzbar über die GNOME-Remote-Desktop-Session)
+#   - QGIS Desktop GUI-Paket ("qgis" + qgis-plugin-grass), optional
+#     (siehe INSTALL_QGIS_DESKTOP unten) — Firefox ist im bestehenden Ubuntu
+#     Desktop ohnehin bereits vorhanden.
 #   - certbot + python3-certbot-nginx (HTTPS via Let's Encrypt)
 #   - UFW firewall + Fail2ban (optional security hardening)
 # =============================================================================
@@ -27,8 +31,8 @@
 #     da qgis.org/ubuntu-ltr nur amd64 baut (kein "LTR"-Tag auf ARM).
 #   - pgAdmin4 Desktop: wird auf ARM übersprungen (Herstellerrepo bietet
 #     dort keine Pakete) — PostgreSQL selbst ist davon nicht betroffen.
-#   - Firefox (Mozilla-Repo) und alle übrigen Komponenten (PHP, PostgreSQL,
-#     Nginx, xRDP/XFCE4, py-qgis-server) sind auf arm64 nativ verfügbar.
+#   - GNOME Remote Desktop, PHP, PostgreSQL, Nginx und py-qgis-server sind
+#     auf arm64 nativ verfügbar.
 #   - Nicht auf echter ARM-Hardware getestet — vor Produktivbetrieb einmal
 #     komplett durchlaufen lassen und mit check_installation.sh prüfen.
 # =============================================================================
@@ -50,10 +54,27 @@ INSTALL_POSTGRESQL=true       # Set to false to skip PostgreSQL
 PG_LIZMAP_DB="lizmap"
 PG_LIZMAP_USER="lizmap"
 PG_LIZMAP_PASS="${PG_LIZMAP_PASS:-lizmap_secret_$(openssl rand -hex 6)}"
-INSTALL_XRDP=true             # Set to false to skip xRDP + XFCE4
-XRDP_USER="gisadmin"          # Dedicated RDP user (created if missing)
-XRDP_PASS="${XRDP_PASS:-GisAdmin_$(openssl rand -hex 4)}"  # Auto-generated, shown at end
-XRDP_PORT=3389
+INSTALL_GNOME_RDP=true        # Nutzt den in GNOME (Ubuntu Desktop, bereits vorhanden)
+                              # eingebauten RDP-Server (gnome-remote-desktop /
+                              # grdctl) — KEIN xfce4, KEIN xrdp-Paket, kein
+                              # zusätzliches Desktop-Environment. Setzt voraus,
+                              # dass Ubuntu Desktop (GNOME, gdm) bereits installiert
+                              # ist. Funktioniert headless (auch ohne dass sich
+                              # vorher jemand lokal einloggt), ab GNOME 46 /
+                              # Ubuntu 24.04+ — auf 26.04 also problemlos.
+                              # RAM-Hinweis (kleine VMs, z.B. 2 vCPU/4 GB):
+                              # GNOME Remote Desktop + Firefox + pgAdmin4-Desktop
+                              # zusammen mit QGIS Server/PostgreSQL sind bei nur
+                              # 4 GB eng. Bei 4 GB: INSTALL_GNOME_RDP=false
+                              # erwägen (QGIS Server/Lizmap laufen unabhängig davon
+                              # normal weiter, nur kein Desktop per RDP). Ab 6-8 GB
+                              # sollte true unproblematisch sein.
+INSTALL_QGIS_DESKTOP=true     # "qgis" (Desktop-GUI, inkl. qgis-plugin-grass) wird
+                              # mitinstalliert und ist über die GNOME-Remote-
+                              # Desktop-Session (siehe INSTALL_GNOME_RDP) nutzbar.
+RDP_USER="gisadmin"           # Dedicated RDP user (created if missing)
+RDP_PASS="${RDP_PASS:-GisAdmin_$(openssl rand -hex 4)}"  # Auto-generated, shown at end
+RDP_PORT=3389
 INSTALL_SECURITY=true         # Set to false to skip UFW + Fail2ban hardening
 CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"  # Set via env var to enable automatic HTTPS via Let's Encrypt:
                               #   export CERTBOT_EMAIL=you@example.com
@@ -207,30 +228,41 @@ else
 fi
 
 # Kernpakete: fatal bei Fehlschlag (ohne diese läuft QGIS Server/Lizmap nicht).
+# qgis-server/python3-qgis/qgis-providers sind reine Server-Komponenten (kein
+# Qt-GUI nötig) und werden daher immer installiert, unabhängig von
+# INSTALL_QGIS_DESKTOP.
 apt-get install -y -qq \
     qgis-server \
-    qgis \
     python3-qgis \
     qgis-providers \
-    || error "QGIS Server/Desktop-Installation fehlgeschlagen (Architektur: ${ARCH}) — prüfe /tmp/qgis_apt_update.log bzw. ob 'universe' aktiviert ist (dpkg --print-foreign-architectures / apt-cache policy qgis-server)."
+    || error "QGIS Server-Installation fehlgeschlagen (Architektur: ${ARCH}) — prüfe /tmp/qgis_apt_update.log bzw. ob 'universe' aktiviert ist (dpkg --print-foreign-architectures / apt-cache policy qgis-server)."
 
-# qgis-plugin-grass: rein optional (QGIS-Desktop-Geoprocessing, wird von
-# QGIS Server/Lizmap-WMS/WFS nicht benötigt). Separat und nicht-fatal
-# installieren — auf Ubuntus universe-Repo kommt es hier gelegentlich zu
-# Versions-Konflikten zwischen qgis-plugin-grass und qgis-plugin-grass-common
-# (z.B. durch Ubuntus "phased updates"-Staging einzelner Binärpakete eines
-# Quellpakets). Ein Fehlschlag hier darf den restlichen Server-Install nicht
-# blockieren.
-if ! apt-get install -y -qq qgis-plugin-grass 2>/tmp/qgis_grass.log; then
-    if apt-get install -y -qq -o APT::Get::Always-Include-Phased-Updates=true \
-        qgis-plugin-grass qgis-plugin-grass-common 2>>/tmp/qgis_grass.log; then
-        log "qgis-plugin-grass installiert (nach Phased-Updates-Retry)."
-    else
-        warn "qgis-plugin-grass konnte nicht installiert werden (siehe /tmp/qgis_grass.log) — übersprungen. Betrifft nur QGIS-Desktop-GRASS-Integration, nicht QGIS Server/Lizmap."
+if [[ "$INSTALL_QGIS_DESKTOP" == "true" ]]; then
+    # "qgis" ist das Desktop-GUI-Paket (Qt/X11-Abhängigkeiten) — nur nötig,
+    # falls direkt auf dem Server per RDP/Desktop Projekte erstellt werden sollen.
+    apt-get install -y -qq qgis \
+        || warn "QGIS Desktop-GUI-Installation fehlgeschlagen — QGIS Server/Lizmap sind davon nicht betroffen, nur Projekt-Authoring direkt auf dem Server."
+
+    # qgis-plugin-grass: rein optional (QGIS-Desktop-Geoprocessing, wird von
+    # QGIS Server/Lizmap-WMS/WFS nicht benötigt). Separat und nicht-fatal
+    # installieren — auf Ubuntus universe-Repo kommt es hier gelegentlich zu
+    # Versions-Konflikten zwischen qgis-plugin-grass und qgis-plugin-grass-common
+    # (z.B. durch Ubuntus "phased updates"-Staging einzelner Binärpakete eines
+    # Quellpakets). Ein Fehlschlag hier darf den restlichen Server-Install nicht
+    # blockieren.
+    if ! apt-get install -y -qq qgis-plugin-grass 2>/tmp/qgis_grass.log; then
+        if apt-get install -y -qq -o APT::Get::Always-Include-Phased-Updates=true \
+            qgis-plugin-grass qgis-plugin-grass-common 2>>/tmp/qgis_grass.log; then
+            log "qgis-plugin-grass installiert (nach Phased-Updates-Retry)."
+        else
+            warn "qgis-plugin-grass konnte nicht installiert werden (siehe /tmp/qgis_grass.log) — übersprungen. Betrifft nur QGIS-Desktop-GRASS-Integration, nicht QGIS Server/Lizmap."
+        fi
     fi
+else
+    log "QGIS Desktop-GUI-Paket übersprungen (INSTALL_QGIS_DESKTOP=false) — nur QGIS Server-Komponenten installiert."
 fi
 
-log "QGIS Server + Desktop installed: $(qgis_mapserv.fcgi --version 2>&1 | head -1 || echo 'see /usr/lib/cgi-bin/qgis_mapserv.fcgi')"
+log "QGIS Server installed: $(qgis_mapserv.fcgi --version 2>&1 | head -1 || echo 'see /usr/lib/cgi-bin/qgis_mapserv.fcgi')"
 
 # ---- PHP and extensions ------------------------------------------------------
 section "3. PHP 8.5-FPM and extensions"
@@ -966,23 +998,85 @@ section "8. Lizmap Web Client ${LIZMAP_VERSION}"
 LIZMAP_ARCHIVE="lizmap-web-client-${LIZMAP_VERSION}.zip"
 LIZMAP_URL="https://github.com/3liz/lizmap-web-client/releases/download/${LIZMAP_VERSION}/${LIZMAP_ARCHIVE}"
 
-# Skip download + install if this exact version is already in place.
-# This makes re-runs safe after a mid-script failure (e.g. Nginx error).
+# Skip download + install if this exact version is already in place AND the
+# core entry-point files are actually intact (non-empty). Ein früherer, mitten
+# im Download/Unzip abgebrochener Lauf (z.B. wegen vollem Speicherplatz) kann
+# project.xml mit der korrekten Versionsnummer hinterlassen, während
+# index.php/api.php/admin.php/.htaccess 0 Byte gross sind — ohne diesen
+# zusätzlichen Check würde eine solche kaputte Installation für immer
+# stillschweigend als "bereits installiert" durchgehen (siehe Abschnitt 8 der
+# Troubleshooting-Doku: HTTP 200 mit leerem Body, ohne jeden Log-Eintrag).
 LIZMAP_INSTALLED_VER=""
 [[ -f "${LIZMAP_DIR}/project.xml" ]] && \
     LIZMAP_INSTALLED_VER=$(grep -oP '(?<=<version>)[^<]+' "${LIZMAP_DIR}/project.xml" 2>/dev/null || true)
 
-if [[ "${LIZMAP_INSTALLED_VER}" == "${LIZMAP_VERSION}" ]]; then
+LIZMAP_CORE_INTACT=true
+for f in index.php api.php admin.php .htaccess; do
+    if [[ ! -s "${LIZMAP_DIR}/lizmap/www/${f}" ]]; then
+        LIZMAP_CORE_INTACT=false
+        break
+    fi
+done
+
+if [[ "${LIZMAP_INSTALLED_VER}" == "${LIZMAP_VERSION}" ]] && [[ "${LIZMAP_CORE_INTACT}" == "true" ]]; then
     log "Lizmap ${LIZMAP_VERSION} already installed at ${LIZMAP_DIR} — skipping download."
 else
+    if [[ "${LIZMAP_INSTALLED_VER}" == "${LIZMAP_VERSION}" ]] && [[ "${LIZMAP_CORE_INTACT}" == "false" ]]; then
+        warn "Bestehende Lizmap-Installation (Version ${LIZMAP_VERSION}) hat leere/fehlende Kern-Dateien (index.php/api.php/admin.php/.htaccess) — vermutlich ein unvollständiger vorheriger Download/Unzip. Wird neu heruntergeladen."
+    fi
+
     cd /tmp
-    wget -q --show-progress -O "${LIZMAP_ARCHIVE}" "${LIZMAP_URL}"
-    unzip -q "${LIZMAP_ARCHIVE}" -d /tmp/lizmap-extract
+    rm -f "${LIZMAP_ARCHIVE}"
+
+    # Download mit bis zu 3 Versuchen + Dateityp-Prüfung — schützt gegen
+    # transiente Netzwerkfehler und gegen Fehlerseiten (HTML/JSON), die statt
+    # des ZIP-Archivs heruntergeladen werden könnten.
+    LIZMAP_DL_OK=false
+    for attempt in 1 2 3; do
+        if wget -q --show-progress -O "${LIZMAP_ARCHIVE}" "${LIZMAP_URL}" && \
+           file "${LIZMAP_ARCHIVE}" | grep -qi "zip"; then
+            LIZMAP_DL_OK=true
+            break
+        fi
+        warn "Lizmap-Download fehlgeschlagen oder keine gültige ZIP-Datei (Versuch ${attempt}/3)."
+        rm -f "${LIZMAP_ARCHIVE}"
+        [[ ${attempt} -lt 3 ]] && sleep 5
+    done
+    [[ "${LIZMAP_DL_OK}" == "true" ]] || error "Lizmap-Download von ${LIZMAP_URL} nach 3 Versuchen fehlgeschlagen — Abbruch. Mögliche Ursachen: Netzwerkproblem, GitHub nicht erreichbar, oder LIZMAP_VERSION=${LIZMAP_VERSION} existiert nicht als Release."
+
+    # unzip -t verifiziert die Archiv-Integrität VOR dem eigentlichen Entpacken
+    # (schützt gegen abgebrochene Downloads, die trotzdem als "zip" erkannt
+    # werden, z.B. bei vollem Speicherplatz mitten im Download).
+    unzip -tq "${LIZMAP_ARCHIVE}" \
+        || error "Lizmap-ZIP-Archiv ist beschädigt (unzip -t fehlgeschlagen) — evtl. zu wenig freier Speicherplatz beim Download. Prüfe: df -h /tmp"
+
+    rm -rf /tmp/lizmap-extract
+    unzip -q "${LIZMAP_ARCHIVE}" -d /tmp/lizmap-extract \
+        || error "Entpacken des Lizmap-Archivs fehlgeschlagen (unzip-Exitcode != 0) — evtl. zu wenig freier Speicherplatz. Prüfe: df -h /tmp"
 
     # Install to web root
     rm -rf "${LIZMAP_DIR}"
-    mv "/tmp/lizmap-extract/lizmap-web-client-${LIZMAP_VERSION}" "${LIZMAP_DIR}"
+    mv "/tmp/lizmap-extract/lizmap-web-client-${LIZMAP_VERSION}" "${LIZMAP_DIR}" \
+        || error "Verschieben des entpackten Lizmap-Verzeichnisses nach ${LIZMAP_DIR} fehlgeschlagen."
     rm -f "/tmp/${LIZMAP_ARCHIVE}"
+
+    # ---- Integritäts-Check: zentrale Einstiegspunkte dürfen nicht 0 Byte sein ----
+    # Schutz gegen genau das Problem, das zu dieser Ergänzung führte: ein
+    # unvollständiges Entpacken (z.B. durch vollen Speicherplatz mitten im
+    # unzip-Lauf) kann HTTP 200 mit leerem Body erzeugen, ohne dass Nginx oder
+    # PHP-FPM einen Fehler loggen — der Ausfall fällt sonst erst beim Testen
+    # im Browser auf.
+    LIZMAP_INTEGRITY_FAILED=false
+    for f in index.php api.php admin.php .htaccess; do
+        if [[ ! -s "${LIZMAP_DIR}/lizmap/www/${f}" ]]; then
+            warn "Integritäts-Check: ${LIZMAP_DIR}/lizmap/www/${f} fehlt oder ist 0 Byte gross."
+            LIZMAP_INTEGRITY_FAILED=true
+        fi
+    done
+    if [[ "${LIZMAP_INTEGRITY_FAILED}" == "true" ]]; then
+        error "Lizmap-Installation unvollständig — zentrale Dateien fehlen oder sind leer (siehe Warnungen oben). Häufigste Ursache: zu wenig freier Speicherplatz während Download/Unzip. Prüfe 'df -h' und starte das Skript danach erneut."
+    fi
+    log "Lizmap-Integritätscheck OK — alle Kern-Dateien vorhanden und nicht leer."
 fi
 
 # Configure + install only when freshly extracted (installer.php writes a
@@ -1360,188 +1454,95 @@ systemctl enable nginx
 systemctl restart nginx
 log "Nginx configured."
 
-# ---- xRDP + XFCE4 desktop ---------------------------------------------------
-if [[ "$INSTALL_XRDP" == "true" ]]; then
-    section "10. xRDP + XFCE4 desktop environment"
+# ---- GNOME Remote Desktop (nativer RDP-Server, kein xfce4/xrdp) -------------
+if [[ "$INSTALL_GNOME_RDP" == "true" ]]; then
+    section "10. GNOME Remote Desktop (nativer RDP-Zugriff, kein xfce4/xrdp)"
 
-    log "Installing xRDP + XFCE4 — this may take 5–15 minutes depending on your connection..."
-    apt-get install -y -q \
-        xfce4 \
-        xfce4-goodies \
-        xfce4-terminal \
-        xfce4-power-manager \
-        thunar \
-        mousepad \
-        xorg \
-        dbus-x11 \
-        xrdp \
-        xorgxrdp \
-        pulseaudio \
-        pavucontrol \
-        xdg-utils \
-        xdg-user-dirs \
-        mate-polkit \
-        at-spi2-core
-
-    # ---- Firefox (native .deb via Mozilla PPA — Snap version fails in RDP) ---
-    # Ubuntu (weiterhin auch 26.04) liefert Firefox standardmäßig als Snap aus, das in RDP-Sitzungen keinen Display-Zugriff hat.
-    # ARM-Hinweis: Mozillas offizielles apt-Repo liefert laut aktuellem Stand
-    # (2026) sowohl amd64- als auch arm64-Pakete für den Stable-Kanal — hier
-    # bewusst keine Architektur-Einschränkung in der Quellzeile (kein
-    # "[arch=...]"), damit apt automatisch die native Architektur zieht.
-    # Install the official Mozilla .deb instead.
-    if ! command -v firefox &>/dev/null; then
-        log "Installing Firefox (native .deb from Mozilla PPA)..."
-        # Remove snap version if present
-        snap remove firefox 2>/dev/null || true
-        # Add Mozilla apt repository
-        install -d -m 0755 /etc/apt/keyrings
-        wget -q https://packages.mozilla.org/apt/repo-signing-key.gpg \
-             -O /etc/apt/keyrings/packages.mozilla.org.asc
-        echo "deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main" \
-             > /etc/apt/sources.list.d/mozilla.list
-        # Ensure Mozilla PPA takes priority over any Ubuntu firefox stub
-        cat > /etc/apt/preferences.d/mozilla <<'MОЗPREF'
-Package: *
-Pin: origin packages.mozilla.org
-Pin-Priority: 1000
-MОЗPREF
-        apt-get update -qq
-        apt-get install -y -qq firefox
-        log "Firefox installed successfully."
-    else
-        log "Firefox already installed — skipping."
+    if ! command -v gdm3 &>/dev/null && ! systemctl list-unit-files 2>/dev/null | grep -q '^gdm\.service'; then
+        warn "gdm.service nicht gefunden — es sieht so aus, als wäre kein Ubuntu"
+        warn "Desktop/GNOME installiert. GNOME Remote Desktop benötigt GNOME (gdm)."
+        warn "Installiere z.B. 'ubuntu-desktop-minimal' zuerst, oder setze"
+        warn "INSTALL_GNOME_RDP=false und nutze SSH/X11-Forwarding stattdessen."
     fi
+
+    apt-get install -y -qq gnome-remote-desktop winpr-utils \
+        || error "gnome-remote-desktop-Installation fehlgeschlagen."
 
     # ---- Dedicated RDP user --------------------------------------------------
-    if ! id "${XRDP_USER}" &>/dev/null; then
-        useradd -m -s /bin/bash -G sudo,xrdp "${XRDP_USER}"
-        echo "${XRDP_USER}:${XRDP_PASS}" | chpasswd
-        log "RDP user '${XRDP_USER}' created."
+    if ! id "${RDP_USER}" &>/dev/null; then
+        useradd -m -s /bin/bash -G sudo "${RDP_USER}"
+        echo "${RDP_USER}:${RDP_PASS}" | chpasswd
+        log "RDP-Benutzer '${RDP_USER}' angelegt."
     else
-        # User exists — still set/update password and groups
-        echo "${XRDP_USER}:${XRDP_PASS}" | chpasswd
-        usermod -aG sudo,xrdp "${XRDP_USER}" 2>/dev/null || true
-        warn "User '${XRDP_USER}' already existed — password updated."
+        echo "${RDP_USER}:${RDP_PASS}" | chpasswd
+        usermod -aG sudo "${RDP_USER}" 2>/dev/null || true
+        warn "Benutzer '${RDP_USER}' existierte bereits — Passwort aktualisiert."
     fi
 
-    # Allow QGIS projects dir access
-    usermod -aG qgis "${XRDP_USER}" 2>/dev/null || true
+    # Zugriff auf QGIS-Projektverzeichnis
+    usermod -aG qgis "${RDP_USER}" 2>/dev/null || true
     chown -R qgis:qgis "${QGIS_PROJECTS_DIR}"
     chmod -R g+rw "${QGIS_PROJECTS_DIR}"
     chmod g+s "${QGIS_PROJECTS_DIR}"
 
-    # ---- xRDP: use XFCE4 session for all users --------------------------------
-    # Global fallback session script
-    cat > /etc/xrdp/startwm.sh <<'STARTWM'
-#!/bin/sh
-# xRDP session startup — uses XFCE4
+    # Damit RDP_USER-Sessions auch ohne vorherigen physischen Login starten
+    # bleiben (wichtig für headless/VM-Betrieb ohne lokalen Monitor).
+    loginctl enable-linger "${RDP_USER}" 2>/dev/null || true
 
-unset DBUS_SESSION_BUS_ADDRESS
-unset XDG_RUNTIME_DIR
+    # ---- System-weiter GNOME-Remote-Desktop-Dienst (Multi-User, headless) ----
+    # "--system"-Modus: RDP-Zugriff direkt auf den GDM-Loginscreen bzw. auf
+    # bestehende Nutzer-Sessions, unabhängig davon ob sich vorher lokal jemand
+    # angemeldet hat. Läuft unter dem Systemkonto "gnome-remote-desktop".
+    #
+    # WICHTIG (Zwei-Stufen-Anmeldung): Diese Credentials sind nur der
+    # "Türsteher" für die erste RDP-Verbindung — die eigentliche Desktop-
+    # Session danach erfordert einen ECHTEN Linux-Benutzer-Login (z.B. den
+    # oben angelegten RDP_USER, oder einen bestehenden Account). grdctl
+    # speichert immer nur EIN Credential-Paar; ein erneuter set-credentials-
+    # Aufruf überschreibt das vorherige vollständig.
+    GRD_CERT_DIR="/var/lib/gnome-remote-desktop/.local/share/gnome-remote-desktop"
+    mkdir -p "${GRD_CERT_DIR}"
 
-if [ -r /etc/default/locale ]; then
-    . /etc/default/locale
-    export LANG LANGUAGE
-fi
+    if [ ! -f "${GRD_CERT_DIR}/tls.key" ] || [ ! -f "${GRD_CERT_DIR}/tls.crt" ]; then
+        winpr-makecert -rdp -path "${GRD_CERT_DIR}" -n tls -silent >/dev/null 2>&1 \
+            || openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+                   -keyout "${GRD_CERT_DIR}/tls.key" \
+                   -out    "${GRD_CERT_DIR}/tls.crt" \
+                   -subj "/CN=${SERVER_NAME%% *}/O=GIS Server/C=US" 2>/dev/null
+    fi
+    chown -R gnome-remote-desktop:gnome-remote-desktop "${GRD_CERT_DIR}" 2>/dev/null || \
+        chown -R gnome-remote-desktop:$(id -gn gnome-remote-desktop 2>/dev/null || echo gnome-remote-desktop) "${GRD_CERT_DIR}" 2>/dev/null || true
+    chmod 600 "${GRD_CERT_DIR}/tls.key" 2>/dev/null || true
 
-# Use XFCE4
-exec /usr/bin/startxfce4
-STARTWM
-    chmod +x /etc/xrdp/startwm.sh
+    grdctl --system rdp set-tls-key  "${GRD_CERT_DIR}/tls.key"
+    grdctl --system rdp set-tls-cert "${GRD_CERT_DIR}/tls.crt"
+    # Direkt als Argumente übergeben (zuverlässiger als eine stdin-Pipe-
+    # Variante, die in der Praxis Username/Passwort auf "(null)" stehen lässt
+    # statt sie zu übernehmen). WICHTIG: RDP_PASS darf NUR ASCII-Zeichen
+    # enthalten (keine Umlaute ä/ö/ü/ß) — ein bekannter FreeRDP-Bug lässt bei
+    # Nicht-ASCII-Passwörtern die NTLM-MIC-Prüfung fehlschlagen
+    # ("Message Integrity Check (MIC) verification failed!", FreeRDP #8599).
+    grdctl --system rdp set-credentials "${RDP_USER}" "${RDP_PASS}"
+    grdctl --system rdp enable
 
-    # Per-user .xsessionrc (applied to XRDP_USER and root skeleton)
-    for HOME_DIR in "/home/${XRDP_USER}" "/etc/skel"; do
-        mkdir -p "${HOME_DIR}"
-        cat > "${HOME_DIR}/.xsessionrc" <<'XSESSION'
-export DESKTOP_SESSION=xfce
-export GDMSESSION=xfce
-export XDG_SESSION_DESKTOP=xfce
-export XDG_CURRENT_DESKTOP=XFCE
-export XDG_SESSION_TYPE=x11
-unset DBUS_SESSION_BUS_ADDRESS
-unset XDG_RUNTIME_DIR
-XSESSION
-        # Ensure XFCE4 is the preferred session
-        mkdir -p "${HOME_DIR}/.config"
-        cat > "${HOME_DIR}/.config/xfce4-session.rc" <<'XFCERC'
-[General]
-SessionName=Default
-XFCERC
-    done
-    chown -R "${XRDP_USER}:${XRDP_USER}" "/home/${XRDP_USER}" 2>/dev/null || true
-
-    # ---- Fix: black screen / PolicyKit authentication agent ------------------
-    # mate-polkit binary path — multiarch-Verzeichnis dynamisch ermitteln statt
-    # x86_64-linux-gnu hart zu verdrahten (auf arm64 lautet es aarch64-linux-gnu).
-    MATE_POLKIT_TRIPLET=$(dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null || echo "x86_64-linux-gnu")
-    MATE_POLKIT_BIN="/usr/lib/${MATE_POLKIT_TRIPLET}/mate-polkit/polkit-mate-authentication-agent-1"
-    POLKIT_XFCE="/etc/xdg/autostart/mate-polkit-autostart.desktop"
-    if [ ! -f "${POLKIT_XFCE}" ]; then
-        cat > "${POLKIT_XFCE}" <<POLKIT
-[Desktop Entry]
-Type=Application
-Name=PolicyKit Authentication Agent
-Comment=PolicyKit Authentication Agent (mate-polkit)
-Exec=${MATE_POLKIT_BIN}
-Terminal=false
-NoDisplay=true
-StartupNotify=false
-Categories=XFCE;
-OnlyShowIn=XFCE;
-POLKIT
+    # Standard-RDP-Port ist bei GNOME Remote Desktop fest 3389 (nicht per
+    # grdctl konfigurierbar) — RDP_PORT bleibt hier informativ für Firewall/Doku.
+    if [[ "${RDP_PORT}" != "3389" ]]; then
+        warn "GNOME Remote Desktop nutzt fest Port 3389 (kein Port-Umstellen via grdctl möglich)."
+        warn "RDP_PORT=${RDP_PORT} wird für die Firewall-Regel dennoch verwendet — bitte anpassen falls abweichend."
     fi
 
-    # ---- Fix: xrdp colour depth and session bus ------------------------------
-    # Ensure xrdp uses 24-bit colour (avoids palette glitches)
-    sed -i 's/^#\?max_bpp=.*/max_bpp=32/'       /etc/xrdp/xrdp.ini
-    sed -i 's/^#\?xserverbpp=.*/xserverbpp=24/'  /etc/xrdp/xrdp.ini
-    # Allow users to reconnect to their existing session
-    sed -i 's/^#\?use_vsock=.*/use_vsock=false/' /etc/xrdp/xrdp.ini
+    systemctl enable --now gdm.service 2>/dev/null || warn "gdm.service konnte nicht aktiviert werden (bereits aktiv oder nicht installiert?)."
+    systemctl enable --now gnome-remote-desktop.service
 
-    # ---- Fix: /tmp/.X11-unix permissions (bereits seit 24.04 nötig, unverändert) ---
-    if ! grep -q 'X11DisplayOffset' /etc/xrdp/xrdp.ini; then
-        echo "X11DisplayOffset=10" >> /etc/xrdp/xrdp.ini
-    fi
-
-    # ---- SSL certificate for xRDP (self-signed) ------------------------------
-    if [ ! -f /etc/xrdp/cert.pem ]; then
-        openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
-            -keyout /etc/xrdp/key.pem \
-            -out  /etc/xrdp/cert.pem \
-            -subj "/CN=${SERVER_NAME}/O=GIS Server/C=US" 2>/dev/null
-        chmod 640 /etc/xrdp/key.pem /etc/xrdp/cert.pem
-        chown root:ssl-cert /etc/xrdp/key.pem /etc/xrdp/cert.pem
-    fi
-
-    # xrdp must be in ssl-cert group to read the key
-    usermod -aG ssl-cert xrdp
-
-    # Update xrdp.ini to use the certificate
-    sed -i "s|^#\?certificate=.*|certificate=/etc/xrdp/cert.pem|" /etc/xrdp/xrdp.ini
-    sed -i "s|^#\?key_file=.*|key_file=/etc/xrdp/key.pem|"        /etc/xrdp/xrdp.ini
-
-    # ---- Custom xRDP port (if changed from default 3389) ---------------------
-    if [[ "${XRDP_PORT}" != "3389" ]]; then
-        sed -i "s/^port=.*/port=${XRDP_PORT}/" /etc/xrdp/xrdp.ini
-    fi
-
-    # ---- Tune xRDP performance -----------------------------------------------
-    sed -i 's/^#\?tcp_nodelay=.*/tcp_nodelay=true/'         /etc/xrdp/xrdp.ini
-    sed -i 's/^#\?tcp_keepalive=.*/tcp_keepalive=true/'     /etc/xrdp/xrdp.ini
-    sed -i 's/^#\?bulk_compression=.*/bulk_compression=true/' /etc/xrdp/xrdp.ini
-
-    # ---- Systemd: enable and start xRDP -------------------------------------
-    systemctl daemon-reload
-    systemctl enable xrdp xrdp-sesman
-    systemctl restart xrdp xrdp-sesman
-
-    log "xRDP configured on port ${XRDP_PORT}. Desktop: XFCE4."
+    log "GNOME Remote Desktop (RDP) konfiguriert auf Port 3389. Desktop: GNOME (bereits vorhanden, kein xfce4)."
+    log "Zum späteren Prüfen: grdctl --system status --show-credentials"
+    log "macOS-Client (Windows App): 'use redirection server name:i:1' in der .rdp-Konfiguration setzen (Export -> editieren -> Re-Import), sonst bricht die Verbindung nach der ersten Anmeldung sofort ab."
 fi
 
 # ---- pgAdmin4 Desktop --------------------------------------------------------
-# Installed AFTER xRDP so that any display manager pulled in as a dependency
-# (gdm3 etc.) can be safely purged without breaking xRDP configuration.
+# Installed nach GNOME Remote Desktop — pgadmin4-desktop selbst wird nicht mehr
+# gegen einen zusätzlich installierten Display-Manager abgesichert (siehe unten).
 if [[ "$INSTALL_POSTGRESQL" == "true" ]]; then
     section "10b. pgAdmin4 Desktop"
 
@@ -1566,23 +1567,13 @@ if [[ "$INSTALL_POSTGRESQL" == "true" ]]; then
         DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
             --no-install-recommends pgadmin4-desktop
 
-        # Purge any display manager that pgadmin4-desktop may have pulled in.
-        # gdm3 / lightdm would take over session management and break xRDP.
-        for dm in gdm3 lightdm sddm; do
-            if dpkg -l "$dm" &>/dev/null 2>&1; then
-                warn "${dm} was pulled in by pgadmin4-desktop — purging to protect xRDP."
-                DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq "$dm"
-            fi
-            systemctl disable "$dm" 2>/dev/null || true
-            systemctl stop    "$dm" 2>/dev/null || true
-        done
-        apt-get autoremove -y -qq
-
-        # xRDP must be restarted after display-manager purge
-        if [[ "$INSTALL_XRDP" == "true" ]]; then
-            systemctl restart xrdp xrdp-sesman
-            log "xRDP restarted after pgAdmin4 install."
-        fi
+        # HINWEIS: Frühere Skriptversion (xRDP-Variante) purgte hier gdm3/
+        # lightdm/sddm, falls pgadmin4-desktop sie als Abhängigkeit zog, um
+        # xRDP zu schützen. Das entfällt jetzt bewusst — gdm.service wird von
+        # GNOME Remote Desktop selbst benötigt und darf NICHT gelöscht werden.
+        # Falls pgadmin4-desktop einen zusätzlichen Display-Manager zieht,
+        # bleibt er einfach bestehen (Ubuntu Desktop regelt die Priorität
+        # zwischen mehreren Display-Managern selbst über debconf).
 
         log "pgAdmin4 Desktop installed — launch via RDP: Applications > Development > pgAdmin 4"
     else
@@ -1598,8 +1589,8 @@ if [[ "$INSTALL_SECURITY" == "true" ]]; then
     if command -v ufw &>/dev/null; then
         ufw allow OpenSSH
         ufw allow 'Nginx Full'
-        if [[ "$INSTALL_XRDP" == "true" ]]; then
-            ufw allow "${XRDP_PORT}/tcp" comment "xRDP remote desktop"
+        if [[ "$INSTALL_GNOME_RDP" == "true" ]]; then
+            ufw allow "3389/tcp" comment "GNOME Remote Desktop (RDP)"
         fi
         ufw --force enable
         log "UFW firewall configured."
@@ -1705,13 +1696,13 @@ echo " pgAdmin4           : Desktop-App (RDP > Applications > Development)"
 echo " (save the password — shown only once)"
 echo "------------------------------------------------------------"
 fi
-if [[ "$INSTALL_XRDP" == "true" ]]; then
-echo " Remote Desktop     : ${PUBLIC_IP}:${XRDP_PORT}  (RDP / mstsc)"
-echo " RDP user           : ${XRDP_USER}"
-echo " RDP password       : ${XRDP_PASS}"
+if [[ "$INSTALL_GNOME_RDP" == "true" ]]; then
+echo " Remote Desktop     : ${PUBLIC_IP}:${RDP_PORT}  (RDP / mstsc)"
+echo " RDP user           : ${RDP_USER}"
+echo " RDP password       : ${RDP_PASS}"
 echo " (save this password — shown only once)"
-echo " Desktop            : XFCE4"
-echo " QGIS Desktop       : available inside RDP session"
+echo " Desktop            : GNOME (bereits vorhandenes Ubuntu Desktop)"
+echo " QGIS Desktop       : available inside RDP session (falls INSTALL_QGIS_DESKTOP=true)"
 echo "------------------------------------------------------------"
 fi
 echo " Xvfb display       : :99  (virtual framebuffer for QGIS rendering)"
@@ -1733,8 +1724,8 @@ echo "   PHP-FPM    : /var/log/php8.5-fpm.log"
 echo "   QGIS Server: journalctl -u 'qgis-server@*.service'"
 echo "   Xvfb       : journalctl -u xvfb.service"
 echo "   Supervisor : /var/log/supervisor/py-qgisserver*.log"
-if [[ "$INSTALL_XRDP" == "true" ]]; then
-echo "   xRDP       : /var/log/xrdp.log  /var/log/xrdp-sesman.log"
+if [[ "$INSTALL_GNOME_RDP" == "true" ]]; then
+echo "   GNOME RDP  : journalctl -u gnome-remote-desktop.service"
 fi
 if [[ "$INSTALL_SECURITY" == "true" ]]; then
 echo "   Fail2ban   : /var/log/fail2ban.log"
@@ -1746,10 +1737,20 @@ echo "============================================================"
 echo ""
 echo "Next steps:"
 echo "  1. Log in at http://${PUBLIC_IP}/ and change the Lizmap admin password"
-echo "  2. Connect via RDP (mstsc / Remmina) to ${PUBLIC_IP}:${XRDP_PORT}"
+if [[ "$INSTALL_GNOME_RDP" == "true" ]]; then
+echo "  2. Connect via RDP (Windows App / mstsc / Remmina) to ${PUBLIC_IP}:${RDP_PORT}"
+echo "     WICHTIG (macOS Windows App): 'use redirection server name:i:1' in der"
+echo "     .rdp-Konfiguration setzen (Export -> editieren -> Re-Import), sonst"
+echo "     bricht die Verbindung nach der ersten Anmeldung sofort ab."
 echo "  3. Open QGIS Desktop in the RDP session to author .qgs/.qgz projects"
+else
+echo "  2. Projekt-Authoring erfolgt auf deinem Mac/Windows-PC in QGIS Desktop —"
+echo "     .qgs/.qgz-Projekte anschließend nach ${QGIS_PROJECTS_DIR} übertragen"
+echo "     (z.B. per SFTP/scp, Samba-Freigabe, oder git). Kein RDP/Desktop auf"
+echo "     diesem Server installiert (INSTALL_GNOME_RDP=false)."
+fi
 echo "  4. Save projects to: ${QGIS_PROJECTS_DIR}"
-echo "  5. Install the Lizmap QGIS plugin inside QGIS Desktop to configure"
+echo "  5. Install the Lizmap QGIS plugin inside QGIS Desktop (lokal) to configure"
 echo "     per-project publishing options"
 if [ -z "${CERTBOT_EMAIL}" ]; then
 echo "  6. HTTPS not configured — set CERTBOT_EMAIL in the script header and re-run,"

@@ -37,6 +37,63 @@ eines **Lizmap Web Client + py-qgis-server**-Stacks auf **Ubuntu 24.04 LTS**.
 
 ---
 
+## Ubuntu 26.04-Variante (`ubuntu-26.04/`)
+
+Für Ubuntu 26.04 LTS (u. a. arm64/Apple-Silicon-VMs, getestet via VMware Fusion auf Apple M4)
+liegt eine eigenständige Skript-Variante im Unterverzeichnis `ubuntu-26.04/`. Sie basiert auf
+demselben Stack wie die 24.04-Version, ersetzt aber **xRDP + XFCE4 durch GNOME Remote Desktop**
+(`gnome-remote-desktop` / `grdctl`) — kein zusätzliches Desktop-Environment nötig, da Ubuntu
+26.04 Desktop-Installationen bereits GNOME/gdm mitbringen.
+
+| Skript | Zweck |
+|---|---|
+| `install_lizmap_qgisserver_26.04.sh` | Basis-Skript |
+| `install_lizmap_qgisserver_2cpu_26.04.sh` | Kleine VMs (2 vCPU / 4-8 GB RAM) |
+| `install_lizmap_qgisserver_8cpu_26.04.sh` | 8 CPU-Kerne (4 Worker) |
+| `install_lizmap_qgisserver_16cpu_26.04.sh` | 16 CPU-Kerne (8 Worker) |
+| `install_lizmap_qgisserver_no_desktop_26.04.sh` | `INSTALL_GNOME_RDP`/`INSTALL_QGIS_DESKTOP` standardmässig `false` |
+| `check_installation_26.04.sh` | Diagnose + `--fix` |
+| `backup_lizmap_system_26.04.sh` | Backup |
+| `GNOME_RD_Troubleshooting_Dokumentation.docx` | Vollständige Fehlersuche-Historie (siehe unten) |
+
+**Neue/geänderte Variablen gegenüber der 24.04-Variante:**
+
+| Variable | Ersetzt | Beschreibung |
+|---|---|---|
+| `INSTALL_GNOME_RDP` | `INSTALL_XRDP` | GNOME Remote Desktop statt xRDP+XFCE4 installieren |
+| `INSTALL_QGIS_DESKTOP` | *(neu)* | QGIS-Desktop-GUI-Paket (`qgis` + `qgis-plugin-grass`) zusätzlich zu QGIS Server installieren |
+| `RDP_USER` | `XRDP_USER` | Dedizierter Linux-Benutzer **und** grdctl-"Türsteher"-Username (siehe Zwei-Stufen-Anmeldung unten) |
+| `RDP_PASS` | `XRDP_PASS` | Muss reines ASCII sein — bekannter FreeRDP-Bug lässt die NTLM-MIC-Prüfung bei Umlauten (ä/ö/ü/ß) fehlschlagen |
+| `RDP_PORT` | `XRDP_PORT` | Bei GNOME Remote Desktop fest auf `3389`, nicht per `grdctl` änderbar |
+
+### Zwei-Stufen-Anmeldung bei GNOME Remote Desktop
+
+Zentraler Unterschied zu xRDP, der bei der Fehlersuche den grössten Teil ausmachte: GNOME Remote
+Desktop im `--system`-Modus verwendet **zwei unabhängige Zugangsdaten-Systeme**:
+
+1. **`grdctl --system rdp set-credentials`** — reiner "Türsteher" für die erste RDP-Verbindung.
+   Frei gewähltes Username/Passwort-Paar in einer GKeyFile, kein Linux-Account. Speichert immer
+   nur ein Paar — ein erneuter Aufruf überschreibt das vorherige vollständig.
+2. **Echter Linux-Login** — nach erfolgreicher Stufe 1 leitet der Server ("Sending server
+   redirection") zur eigentlichen GNOME-Desktop-Session weiter, wofür ein echter Linux-
+   Systembenutzer mit echtem Login-Passwort nötig ist.
+
+Das Installationsskript legt in Sektion 10 beides mit denselben Werten an (`RDP_USER`/`RDP_PASS`
+werden sowohl als Linux-Account als auch als grdctl-Credentials verwendet) — das funktioniert,
+sollte aber aus Sicherheitssicht nach der Installation typischerweise auf zwei unabhängige
+Werte umgestellt werden (`grdctl --system rdp set-credentials <anderer_user> <anderes_passwort>`).
+
+**macOS-Client (Windows App, ehem. Microsoft Remote Desktop):** Folgt der Server-Redirection aus
+Stufe 2 standardmässig **nicht**. Fix: gespeicherte Verbindung exportieren (`.rdp`-Datei), darin
+`use redirection server name:i:0` auf `i:1` ändern, re-importieren. Ohne diese Einstellung bricht
+die Verbindung mit `ERRINFO_LOGOFF_BY_USER` sofort nach der ersten Anmeldung ab.
+
+Vollständige Diagnose-Historie (inkl. Fehlercodes 0x204/0x207, MIC-Verification-Bug, dem
+gdm3-Purge-Bug im pgAdmin4-Abschnitt, und dem 0-Byte-Lizmap-Deployment-Problem samt
+PHP-OPcache-Fallstrick) in `ubuntu-26.04/GNOME_RD_Troubleshooting_Dokumentation.docx`.
+
+---
+
 ## Installierter Stack
 
 ### Komponenten

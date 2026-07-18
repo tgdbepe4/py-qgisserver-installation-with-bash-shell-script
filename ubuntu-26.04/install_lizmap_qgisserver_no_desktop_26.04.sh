@@ -1,38 +1,49 @@
 #!/bin/bash
 # =============================================================================
-# Lizmap Web Client + py-qgis-server Installation Script — 8 CPU variant
+# Lizmap Web Client + py-qgis-server Installation Script — 2 CPU / VM variant
 # Ubuntu 26.04 LTS (Resolute Raccoon)
-# Optimiert für Server mit 8 CPU-Kernen (QGIS_WORKER_COUNT=4)
+# VARIANTE: nutzt das bereits vorhandene Ubuntu Desktop (GNOME) für Remote-
+# Zugriff statt xfce4/xrdp. Kein zusätzliches Desktop-Environment wird
+# installiert — RDP läuft über den in GNOME eingebauten Remote-Desktop-Server
+# (gnome-remote-desktop / grdctl).
+# Optimiert für kleine VMs (z.B. 2 vCPU / 4-8 GB RAM), z.B. arm64-VM auf Apple
+# Silicon via VMware Fusion (QGIS_WORKER_COUNT=2, siehe anleitung_worker.md "Klein")
 # =============================================================================
-# Usage: sudo bash install_lizmap_qgisserver_8cpu.sh
+# Usage: sudo bash install_lizmap_qgisserver_no_desktop.sh
 #
 # What this script installs:
-#   - QGIS Server LTR (via official QGIS apt repository)
-#   - QGIS Desktop LTR (for project authoring via RDP)
+#   - QGIS Server LTR (via official QGIS apt repository), inkl. QGIS-Desktop-
+#     GUI-Paket ("qgis") + qgis-plugin-grass (INSTALL_QGIS_DESKTOP=true)
 #   - py-qgis-server (3liz Python WSGI wrapper for QGIS Server)
 #   - QGIS Server plugins: atlasprint, lizmap_server, wfsOutputExtension
 #   - qgis.service meta-unit ("service qgis start/stop/restart")
-#   - Xvfb virtual display :99 (fixes QGIS Server X11/Qt rendering)
+#   - Xvfb virtual display :99 (fixes QGIS Server X11/Qt rendering — läuft
+#     unabhängig vom GNOME-Desktop, wird für QGIS Server so oder so benötigt)
+#   - GNOME Remote Desktop (nativer RDP-Server, INSTALL_GNOME_RDP=true) —
+#     KEIN xfce4, KEIN xrdp-Paket. Setzt voraus, dass Ubuntu Desktop/GNOME
+#     bereits auf der Maschine installiert ist.
 #   - Lizmap Web Client (see LIZMAP_VERSION below)
 #   - Nginx + PHP-FPM
 #   - PostgreSQL + PostGIS (optional)
-#   - GNOME Remote Desktop (nativer RDP-Server, optional, Port 3389) — KEIN
-#     xfce4, KEIN xrdp-Paket. Nutzt das auf der Maschine bereits vorhandene
-#     Ubuntu Desktop (GNOME). Siehe INSTALL_GNOME_RDP unten.
-#   - pgAdmin4 Desktop (optional, nutzbar über die GNOME-Remote-Desktop-Session)
-#   - QGIS Desktop GUI-Paket ("qgis" + qgis-plugin-grass), optional
-#     (siehe INSTALL_QGIS_DESKTOP unten) — Firefox ist im bestehenden Ubuntu
-#     Desktop ohnehin bereits vorhanden.
 #   - certbot + python3-certbot-nginx (HTTPS via Let's Encrypt)
 #   - UFW firewall + Fail2ban (optional security hardening)
+#
+# NICHT installiert in dieser Variante:
+#   - xfce4, xrdp, xorgxrdp (ersetzt durch GNOME Remote Desktop)
+#   - pgAdmin4 Desktop (hing bisher an xRDP — bei Bedarf separat installieren)
+#   - Firefox (wurde bisher nur für die xRDP-Desktop-Session installiert;
+#     Firefox ist im bestehenden Ubuntu Desktop ohnehin schon vorhanden)
+# Projekt-Authoring per QGIS Desktop direkt auf dem Server über die GNOME-
+# Remote-Desktop-Session (RDP_USER/RDP_PASS unten), oder wie gewohnt lokal auf
+# deinem Mac/Windows-PC gegen die Server-Daten (z.B. via SFTP/Netzwerkfreigabe).
 # =============================================================================
 # ARM64/aarch64-Hinweis:
 #   - QGIS Server/Desktop: automatischer Umstieg auf Ubuntus universe-Repo,
 #     da qgis.org/ubuntu-ltr nur amd64 baut (kein "LTR"-Tag auf ARM).
 #   - pgAdmin4 Desktop: wird auf ARM übersprungen (Herstellerrepo bietet
 #     dort keine Pakete) — PostgreSQL selbst ist davon nicht betroffen.
-#   - GNOME Remote Desktop, PHP, PostgreSQL, Nginx und py-qgis-server sind
-#     auf arm64 nativ verfügbar.
+#   - Firefox (Mozilla-Repo) und alle übrigen Komponenten (PHP, PostgreSQL,
+#     Nginx, xRDP/XFCE4, py-qgis-server) sind auf arm64 nativ verfügbar.
 #   - Nicht auf echter ARM-Hardware getestet — vor Produktivbetrieb einmal
 #     komplett durchlaufen lassen und mit check_installation.sh prüfen.
 # =============================================================================
@@ -46,8 +57,8 @@ set -uo pipefail
 LIZMAP_VERSION="3.9.9"
 LIZMAP_DIR="/var/www/lizmap"
 QGIS_PROJECTS_DIR="/srv/data"
-QGIS_WORKER_COUNT=4          # Number of QGIS Server worker instances (8 CPU: 4 Worker)
-SERVER_NAME="localhost karte1.wandelderzeit.ch"  # Change to your domain or IP
+QGIS_WORKER_COUNT=2          # Number of QGIS Server worker instances (2 vCPU: 2 Worker, siehe anleitung_worker.md)
+SERVER_NAME="localhost karte2.wandelderzeit.ch"  # Change to your domain or IP
 LIZMAP_USER="www-data"
 LIZMAP_GROUP="www-data"
 INSTALL_POSTGRESQL=true       # Set to false to skip PostgreSQL
@@ -62,17 +73,10 @@ INSTALL_GNOME_RDP=true        # Nutzt den in GNOME (Ubuntu Desktop, bereits vorh
                               # ist. Funktioniert headless (auch ohne dass sich
                               # vorher jemand lokal einloggt), ab GNOME 46 /
                               # Ubuntu 24.04+ — auf 26.04 also problemlos.
-                              # RAM-Hinweis (kleine VMs, z.B. 2 vCPU/4 GB):
-                              # GNOME Remote Desktop + Firefox + pgAdmin4-Desktop
-                              # zusammen mit QGIS Server/PostgreSQL sind bei nur
-                              # 4 GB eng. Bei 4 GB: INSTALL_GNOME_RDP=false
-                              # erwägen (QGIS Server/Lizmap laufen unabhängig davon
-                              # normal weiter, nur kein Desktop per RDP). Ab 6-8 GB
-                              # sollte true unproblematisch sein.
 INSTALL_QGIS_DESKTOP=true     # "qgis" (Desktop-GUI, inkl. qgis-plugin-grass) wird
                               # mitinstalliert und ist über die GNOME-Remote-
                               # Desktop-Session (siehe INSTALL_GNOME_RDP) nutzbar.
-RDP_USER="gisadmin"           # Dedicated RDP user (created if missing)
+RDP_USER="gisadmin"          # Dedicated RDP user (created if missing)
 RDP_PASS="${RDP_PASS:-GisAdmin_$(openssl rand -hex 4)}"  # Auto-generated, shown at end
 RDP_PORT=3389
 INSTALL_SECURITY=true         # Set to false to skip UFW + Fail2ban hardening
@@ -924,13 +928,15 @@ cat > /etc/supervisor/conf.d/py-qgisserver.conf <<EOF
 ; Flag is -c (short form), not --conf — as per official Lizmap docs.
 command=/opt/local/py-qgis-server/bin/qgisserver -c /srv/qgis/server.conf
 user=qgis
+; Worker-Anzahl wird ausschliesslich über server.conf [server] workers = N gesteuert.
+; Der -w Flag wird bewusst weggelassen um Doppelkonfiguration zu vermeiden.
 ; Full environment as per docs.lizmap.com/3.9/en/install/py-qgis-server.html
 ; QGIS_OPTIONS_PATH  → QGIS finds QGIS3.ini (plugin paths, cache config)
 ; QGIS_AUTH_DB_DIR_PATH → authentication database location
 ; QGIS_SERVER_LIZMAP_REVEAL_SETTINGS=TRUE (uppercase!) → enables /lizmap/server.json
 ; QGIS_SERVER_PARALLEL_RENDERING=1 → enables parallel tile rendering per worker
 ; QGSRV_CACHE_SIZE → max number of QGIS projects held in memory (LRU)
-environment=LC_ALL="en_US.UTF-8",HOME="/srv/qgis",DISPLAY=":99",QT_QPA_PLATFORM="xcb",LIBGL_ALWAYS_SOFTWARE="1",QGIS_OPTIONS_PATH="/srv/qgis/",QGIS_AUTH_DB_DIR_PATH="/srv/qgis/",QGIS_SERVER_LOG_LEVEL="1",QGIS_DEBUG="0",QGSRV_SERVER_PLUGINPATH="/srv/qgis/plugins",QGIS_PLUGINPATH="/srv/qgis/plugins",QGIS_SERVER_LIZMAP_REVEAL_SETTINGS="TRUE",QGIS_SERVER_FORCE_READONLY_LAYERS="TRUE",QGSRV_API_ENABLED_LIZMAP="yes",QGSRV_API_ENDPOINTS_LIZMAP="/lizmap",QGIS_SERVER_PARALLEL_RENDERING="1",QGSRV_CACHE_SIZE="6"
+environment=LC_ALL="en_US.UTF-8",HOME="/srv/qgis",DISPLAY=":99",QT_QPA_PLATFORM="xcb",LIBGL_ALWAYS_SOFTWARE="1",QGIS_OPTIONS_PATH="/srv/qgis/",QGIS_AUTH_DB_DIR_PATH="/srv/qgis/",QGIS_SERVER_LOG_LEVEL="1",QGIS_DEBUG="0",QGSRV_SERVER_PLUGINPATH="/srv/qgis/plugins",QGIS_PLUGINPATH="/srv/qgis/plugins",QGIS_SERVER_LIZMAP_REVEAL_SETTINGS="TRUE",QGIS_SERVER_FORCE_READONLY_LAYERS="TRUE",QGSRV_API_ENABLED_LIZMAP="yes",QGSRV_API_ENDPOINTS_LIZMAP="/lizmap",QGIS_SERVER_PARALLEL_RENDERING="1",QGSRV_CACHE_SIZE="3"
 autostart=true
 autorestart=true
 stdout_logfile=/var/log/supervisor/py-qgisserver.log
@@ -1493,13 +1499,6 @@ if [[ "$INSTALL_GNOME_RDP" == "true" ]]; then
     # "--system"-Modus: RDP-Zugriff direkt auf den GDM-Loginscreen bzw. auf
     # bestehende Nutzer-Sessions, unabhängig davon ob sich vorher lokal jemand
     # angemeldet hat. Läuft unter dem Systemkonto "gnome-remote-desktop".
-    #
-    # WICHTIG (Zwei-Stufen-Anmeldung): Diese Credentials sind nur der
-    # "Türsteher" für die erste RDP-Verbindung — die eigentliche Desktop-
-    # Session danach erfordert einen ECHTEN Linux-Benutzer-Login (z.B. den
-    # oben angelegten RDP_USER, oder einen bestehenden Account). grdctl
-    # speichert immer nur EIN Credential-Paar; ein erneuter set-credentials-
-    # Aufruf überschreibt das vorherige vollständig.
     GRD_CERT_DIR="/var/lib/gnome-remote-desktop/.local/share/gnome-remote-desktop"
     mkdir -p "${GRD_CERT_DIR}"
 
@@ -1516,12 +1515,9 @@ if [[ "$INSTALL_GNOME_RDP" == "true" ]]; then
 
     grdctl --system rdp set-tls-key  "${GRD_CERT_DIR}/tls.key"
     grdctl --system rdp set-tls-cert "${GRD_CERT_DIR}/tls.crt"
-    # Direkt als Argumente übergeben (zuverlässiger als eine stdin-Pipe-
-    # Variante, die in der Praxis Username/Passwort auf "(null)" stehen lässt
-    # statt sie zu übernehmen). WICHTIG: RDP_PASS darf NUR ASCII-Zeichen
-    # enthalten (keine Umlaute ä/ö/ü/ß) — ein bekannter FreeRDP-Bug lässt bei
-    # Nicht-ASCII-Passwörtern die NTLM-MIC-Prüfung fehlschlagen
-    # ("Message Integrity Check (MIC) verification failed!", FreeRDP #8599).
+    # Direkt als Argumente übergeben (zuverlässiger als die stdin-Pipe-Variante
+    # "printf ... | grdctl ... set-credentials", die in der Praxis Username/
+    # Passwort auf "(null)" stehen lässt statt sie zu übernehmen).
     grdctl --system rdp set-credentials "${RDP_USER}" "${RDP_PASS}"
     grdctl --system rdp enable
 
@@ -1537,7 +1533,6 @@ if [[ "$INSTALL_GNOME_RDP" == "true" ]]; then
 
     log "GNOME Remote Desktop (RDP) konfiguriert auf Port 3389. Desktop: GNOME (bereits vorhanden, kein xfce4)."
     log "Zum späteren Prüfen: grdctl --system status --show-credentials"
-    log "macOS-Client (Windows App): 'use redirection server name:i:1' in der .rdp-Konfiguration setzen (Export -> editieren -> Re-Import), sonst bricht die Verbindung nach der ersten Anmeldung sofort ab."
 fi
 
 # ---- pgAdmin4 Desktop --------------------------------------------------------
@@ -1702,7 +1697,7 @@ echo " RDP user           : ${RDP_USER}"
 echo " RDP password       : ${RDP_PASS}"
 echo " (save this password — shown only once)"
 echo " Desktop            : GNOME (bereits vorhandenes Ubuntu Desktop)"
-echo " QGIS Desktop       : available inside RDP session (falls INSTALL_QGIS_DESKTOP=true)"
+echo " QGIS Desktop       : available inside RDP session"
 echo "------------------------------------------------------------"
 fi
 echo " Xvfb display       : :99  (virtual framebuffer for QGIS rendering)"
@@ -1738,10 +1733,7 @@ echo ""
 echo "Next steps:"
 echo "  1. Log in at http://${PUBLIC_IP}/ and change the Lizmap admin password"
 if [[ "$INSTALL_GNOME_RDP" == "true" ]]; then
-echo "  2. Connect via RDP (Windows App / mstsc / Remmina) to ${PUBLIC_IP}:${RDP_PORT}"
-echo "     WICHTIG (macOS Windows App): 'use redirection server name:i:1' in der"
-echo "     .rdp-Konfiguration setzen (Export -> editieren -> Re-Import), sonst"
-echo "     bricht die Verbindung nach der ersten Anmeldung sofort ab."
+echo "  2. Connect via RDP (mstsc / Remmina) to ${PUBLIC_IP}:${RDP_PORT}"
 echo "  3. Open QGIS Desktop in the RDP session to author .qgs/.qgz projects"
 else
 echo "  2. Projekt-Authoring erfolgt auf deinem Mac/Windows-PC in QGIS Desktop —"
