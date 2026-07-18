@@ -72,7 +72,7 @@ check_service "php${PHP_VERSION}-fpm"
 check_service xvfb
 check_service supervisor
 check_service postgresql  optional
-check_service xrdp        optional
+check_service gnome-remote-desktop optional
 
 # Supervisor-Prozess py-qgisserver
 PY_STATUS=$(supervisorctl status py-qgisserver 2>/dev/null)
@@ -107,7 +107,7 @@ check_port 80   "Nginx HTTP"
 check_port 443  "Nginx HTTPS"       optional   # HTTPS ist optional
 check_port 7200 "py-qgis-server"
 check_port 5432 "PostgreSQL"        optional
-check_port 3389 "xRDP"             optional
+check_port 3389 "GNOME Remote Desktop" optional
 
 # =============================================================================
 section "3. py-qgis-server"
@@ -917,41 +917,56 @@ if [ -x "${PLUGIN_MGR_BIN}" ]; then
 fi
 
 # =============================================================================
-section "10. xRDP"
+section "10. GNOME Remote Desktop"
 # =============================================================================
 
-if systemctl is-active --quiet xrdp 2>/dev/null; then
-    OK "xRDP aktiv"
+if systemctl is-active --quiet gnome-remote-desktop 2>/dev/null; then
+    OK "GNOME Remote Desktop aktiv"
 
-    [ -f "/etc/xrdp/startwm.sh" ] && OK "startwm.sh vorhanden" \
-        || fail "startwm.sh fehlt: /etc/xrdp/startwm.sh"
-    grep -q "startxfce4" /etc/xrdp/startwm.sh 2>/dev/null \
-        && OK  "startwm.sh: startet XFCE4" \
-        || warn "startwm.sh: startxfce4 nicht gefunden"
-
-    # gdm3 bricht xRDP-Sessions
-    if dpkg -l gdm3 &>/dev/null 2>&1; then
-        fail "gdm3 installiert — bricht xRDP Sessions!"
-        INFO "  → apt-get purge gdm3 -y && systemctl restart xrdp xrdp-sesman"
-        if $FIX_MODE; then
-            FIX "Entferne gdm3 ..."
-            DEBIAN_FRONTEND=noninteractive apt-get purge -y gdm3
-            apt-get autoremove -y
-            systemctl restart xrdp xrdp-sesman
-        fi
+    # gdm.service wird von GNOME Remote Desktop im --system-Modus zwingend
+    # benötigt -- anders als bei xRDP früher, wo ein zusätzlicher Display-
+    # Manager (gdm3) Probleme verursachte. Bei GNOME RD ist das umgekehrt:
+    # gdm.service MUSS laufen, sonst funktioniert der Remote-Zugriff nicht.
+    if systemctl is-active --quiet gdm 2>/dev/null; then
+        OK "gdm.service aktiv ✓ (von GNOME Remote Desktop benötigt)"
     else
-        OK "gdm3 nicht installiert ✓"
+        fail "gdm.service NICHT aktiv — GNOME Remote Desktop benötigt gdm im --system-Modus!"
+        INFO "  → systemctl enable --now gdm.service"
+        if $FIX_MODE; then
+            FIX "Starte gdm.service ..."
+            systemctl enable --now gdm.service 2>/dev/null && OK "  gestartet" || FAIL "  fehlgeschlagen"
+        fi
     fi
 
-    # mate-polkit für PolicyKit in XFCE4
-    if [ -f "/etc/xdg/autostart/mate-polkit-autostart.desktop" ]; then
-        OK "mate-polkit Autostart vorhanden"
+    # grdctl-Backend-Status + Zugangsdaten prüfen
+    GRD_STATUS=$(grdctl --system status --show-credentials 2>/dev/null)
+    if echo "${GRD_STATUS}" | grep -q "Status: enabled"; then
+        OK "grdctl: RDP-Backend enabled"
     else
-        warn "mate-polkit Autostart fehlt (/etc/xdg/autostart/mate-polkit-autostart.desktop)"
-        INFO "  → Kann zu schwarzem Bildschirm nach RDP-Login führen"
+        fail "grdctl: RDP-Backend nicht enabled"
+        INFO "  → grdctl --system rdp enable"
+    fi
+
+    GRD_USER=$(echo "${GRD_STATUS}" | grep -oP '(?<=^Username: ).*')
+    GRD_PASS=$(echo "${GRD_STATUS}" | grep -oP '(?<=^Password: ).*')
+    if [ -z "${GRD_USER}" ] || [ "${GRD_USER}" = "(null)" ]; then
+        fail "grdctl: Keine Zugangsdaten gesetzt (Username: (null))"
+        INFO "  → grdctl --system rdp set-credentials <user> <passwort>"
+        INFO "  → WICHTIG: Argumente direkt übergeben, NICHT per stdin-Pipe (bekannter Bug, ließ Username/Passwort bisher auf \"(null)\" stehen)"
+    else
+        OK "grdctl: Zugangsdaten gesetzt (Username: ${GRD_USER})"
+        # Nicht-ASCII-Zeichen im Passwort prüfen — bekannter FreeRDP-Bug lässt
+        # die NTLM-MIC-Verifikation dabei fehlschlagen (FreeRDP-Issue #8599).
+        if echo "${GRD_PASS}" | LC_ALL=C grep -qP '[^\x00-\x7F]'; then
+            fail "grdctl: RDP-Passwort enthält Nicht-ASCII-Zeichen (z.B. Umlaute)"
+            INFO "  → Bekannter FreeRDP-Bug: NTLM-MIC-Verification schlägt dabei fehl (FreeRDP-Issue #8599)"
+            INFO "  → grdctl --system rdp set-credentials ${GRD_USER} '<reines-ascii-passwort>'"
+        else
+            OK "grdctl: RDP-Passwort ist reines ASCII ✓"
+        fi
     fi
 else
-    INFO "xRDP nicht aktiv (optional)"
+    INFO "GNOME Remote Desktop nicht aktiv (optional)"
 fi
 
 # =============================================================================
@@ -1037,7 +1052,7 @@ fi
 echo ""
 echo -e "  ${CYAN}Nützliche Befehle:${NC}"
 echo "  supervisorctl status"
-echo "  systemctl status nginx php${PHP_VERSION}-fpm xvfb xrdp postgresql"
+echo "  systemctl status nginx php${PHP_VERSION}-fpm xvfb gnome-remote-desktop postgresql"
 echo "  tail -50 /var/log/supervisor/py-qgisserver-err.log"
 echo "  tail -50 /var/log/nginx/lizmap-error.log"
 echo "  journalctl -u xvfb -n 20"

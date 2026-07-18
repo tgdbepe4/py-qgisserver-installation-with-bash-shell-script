@@ -123,14 +123,19 @@ for unit in xvfb.service qgis.service qgis-server@.service qgis-server@.socket; 
 done
 
 # =============================================================================
-section "8. xRDP-Konfiguration"
+section "8. GNOME Remote Desktop-Konfiguration"
 # =============================================================================
 
-if [ -f /etc/xrdp/startwm.sh ]; then
-    log "Sichere xRDP-Konfiguration ..."
-    mkdir -p "${BACKUP_DIR}/etc/xrdp"
-    cp /etc/xrdp/startwm.sh "${BACKUP_DIR}/etc/xrdp/" 2>/dev/null || true
-    cp /etc/xrdp/xrdp.ini   "${BACKUP_DIR}/etc/xrdp/" 2>/dev/null || true
+if command -v grdctl &>/dev/null; then
+    log "Sichere GNOME-Remote-Desktop-Konfiguration ..."
+    mkdir -p "${BACKUP_DIR}/etc/gnome-remote-desktop"
+    # TLS-Zertifikat + Key (grdctl-Credentials selbst NICHT sichern -- Klartext-
+    # Zugangsdaten gehoeren nicht in ein Backup-Archiv; nach einem Restore
+    # einfach neu setzen: grdctl --system rdp set-credentials <user> <pass>)
+    GRD_CERT_DIR="/var/lib/gnome-remote-desktop/.local/share/gnome-remote-desktop"
+    cp "${GRD_CERT_DIR}/tls.crt" "${BACKUP_DIR}/etc/gnome-remote-desktop/" 2>/dev/null || true
+    cp "${GRD_CERT_DIR}/tls.key" "${BACKUP_DIR}/etc/gnome-remote-desktop/" 2>/dev/null || true
+    grdctl --system status > "${BACKUP_DIR}/etc/gnome-remote-desktop/status.txt" 2>/dev/null || true
 fi
 
 # =============================================================================
@@ -145,7 +150,7 @@ log "Speichere System-Informationen ..."
     lsb_release -a 2>/dev/null
     echo ""
     echo "--- Installierte Pakete (relevant) ---"
-    dpkg -l | grep -E "qgis|nginx|php|postgresql|xrdp|supervisor|python3" | awk '{print $2, $3}'
+    dpkg -l | grep -E "qgis|nginx|php|postgresql|gnome-remote-desktop|supervisor|python3" | awk '{print $2, $3}'
     echo ""
     echo "--- py-qgis-server ---"
     /opt/local/py-qgis-server/bin/pip show py-qgis-server 2>/dev/null
@@ -154,7 +159,7 @@ log "Speichere System-Informationen ..."
     supervisorctl status 2>/dev/null
     echo ""
     echo "--- Dienste ---"
-    systemctl is-active nginx php8.5-fpm xvfb supervisor postgresql xrdp 2>/dev/null
+    systemctl is-active nginx php8.5-fpm xvfb supervisor postgresql gnome-remote-desktop 2>/dev/null
     echo ""
     echo "--- Lizmap Plugin API ---"
     curl -s http://127.0.0.1:7200/lizmap/server.json 2>/dev/null | python3 -m json.tool
