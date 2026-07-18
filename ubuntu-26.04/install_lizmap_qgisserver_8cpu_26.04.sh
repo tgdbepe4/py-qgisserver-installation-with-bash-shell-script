@@ -1238,6 +1238,71 @@ fi
 
 fi  # end: fresh-install-only block
 
+# ---- Integritäts-Check: jcache-Profile MÜSSEN vorhanden sein ---------------
+# Läuft bewusst AUSSERHALB des obigen "nur bei Frischinstallation"-Blocks und
+# bei JEDEM Skript-Lauf, auch wenn installer.ini.php bereits existiert. Lizmap
+# braucht [jcache:default]/[jcache:qgisprojects]/[jcache:requests] in profiles.ini.php
+# in jedem Fall (u.a. für Medien-Auslieferung und WFS-Requests) — im PostgreSQL-
+# Zweig oben werden sie zwar geschrieben, aber falls profiles.ini.php z.B. aus
+# einem älteren/unvollständigen Backup wiederhergestellt wurde (siehe
+# GNOME_RD_Troubleshooting_Dokumentation.docx, Abschnitt 8), können sie fehlen.
+# Ohne diese Sektionen schlägt Lizmap mit "Unknown profile ... for jcache" fehl
+# (HTTP 500), ohne dass Nginx oder PHP-FPM einen aussagekräftigen Fehler loggen.
+LIZMAP_PROFILES_INI="${LIZMAP_DIR}/lizmap/var/config/profiles.ini.php"
+if [ -f "${LIZMAP_PROFILES_INI}" ]; then
+    JCACHE_MISSING=false
+    for jcache_section in "jcache:default" "jcache:qgisprojects" "jcache:requests"; do
+        if ! grep -q "^\[${jcache_section}\]" "${LIZMAP_PROFILES_INI}" 2>/dev/null; then
+            warn "profiles.ini.php: Sektion [${jcache_section}] fehlt — wird ergänzt."
+            JCACHE_MISSING=true
+        fi
+    done
+    if [[ "${JCACHE_MISSING}" == "true" ]]; then
+        cat >> "${LIZMAP_PROFILES_INI}" <<PROFILES
+
+[jcache:default]
+driver=file
+storage_dir=${LIZMAP_DIR}/lizmap/var/cache
+ttl=300
+
+[jcache:qgisprojects]
+driver=file
+storage_dir=${LIZMAP_DIR}/lizmap/var/cache/qgisprojects
+ttl=300
+
+[jcache:requests]
+driver=file
+storage_dir=${LIZMAP_DIR}/lizmap/var/cache/requests
+ttl=300
+PROFILES
+        chown "${LIZMAP_USER}:${LIZMAP_GROUP}" "${LIZMAP_PROFILES_INI}"
+        # Datei-Integrität gegenprüfen: "file" muss ASCII/UTF-8-Text erkennen,
+        # nicht "data" — ein bekanntes Problem beim Nachbearbeiten dieser Datei
+        # über manche Terminal-/RDP-Sitzungen (eingeschleuste Steuerzeichen,
+        # siehe GNOME_RD_Troubleshooting_Dokumentation.docx) kann sonst eine
+        # scheinbar korrekte, tatsächlich aber binär beschädigte Datei erzeugen.
+        if file "${LIZMAP_PROFILES_INI}" | grep -qiv "text"; then
+            error "profiles.ini.php ist nach dem Schreiben keine gültige Textdatei (file-Befehl meldet: $(file -b "${LIZMAP_PROFILES_INI}")) — evtl. Terminal-/Encoding-Problem beim Skript-Lauf. Datei manuell prüfen: file ${LIZMAP_PROFILES_INI}"
+        fi
+        log "profiles.ini.php: fehlende jcache-Profile ergänzt und verifiziert."
+    else
+        log "profiles.ini.php: alle jcache-Profile vorhanden ✓"
+    fi
+    mkdir -p "${LIZMAP_DIR}/lizmap/var/cache/qgisprojects" "${LIZMAP_DIR}/lizmap/var/cache/requests"
+    chown -R "${LIZMAP_USER}:${LIZMAP_GROUP}" "${LIZMAP_DIR}/lizmap/var/cache"
+
+    # Jelix' kompilierten Profile-Cache (temp/lizmap/www/profiles.cache.json)
+    # leeren, falls profiles.ini.php gerade repariert wurde — sonst liest
+    # Jelix trotz korrekter Datei weiter die alte, im Cache eingefrorene
+    # Version (führt zum selben "Unknown profile"-Fehler trotz korrekter Config).
+    if [[ "${JCACHE_MISSING}" == "true" ]]; then
+        rm -rf "${LIZMAP_DIR}/temp"/*
+        mkdir -p "${LIZMAP_DIR}/temp/lizmap"
+        chown -R "${LIZMAP_USER}:${LIZMAP_GROUP}" "${LIZMAP_DIR}/temp"
+        log "Jelix-Kompilierungs-Cache (temp/) geleert, damit die reparierte profiles.ini.php sicher neu eingelesen wird."
+    fi
+fi
+
 # QGIS projects symlink inside Lizmap
 ln -sf "${QGIS_PROJECTS_DIR}" "${LIZMAP_DIR}/lizmap/var/lizmap-theme-config" 2>/dev/null || true
 mkdir -p "${LIZMAP_DIR}/lizmap/var/lizmap-theme-config"

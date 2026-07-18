@@ -89,8 +89,10 @@ Stufe 2 standardmässig **nicht**. Fix: gespeicherte Verbindung exportieren (`.r
 die Verbindung mit `ERRINFO_LOGOFF_BY_USER` sofort nach der ersten Anmeldung ab.
 
 Vollständige Diagnose-Historie (inkl. Fehlercodes 0x204/0x207, MIC-Verification-Bug, dem
-gdm3-Purge-Bug im pgAdmin4-Abschnitt, und dem 0-Byte-Lizmap-Deployment-Problem samt
-PHP-OPcache-Fallstrick) in `ubuntu-26.04/GNOME_RD_Troubleshooting_Dokumentation.docx`.
+gdm3-Purge-Bug im pgAdmin4-Abschnitt, dem 0-Byte-Lizmap-Deployment-Problem samt
+PHP-OPcache-Fallstrick, sowie fehlenden jcache-Profilen in `profiles.ini.php` inkl. Jelix-
+Kompilierungs-Cache und eines Terminal-Korruptions-Phänomens beim Nachbearbeiten von Dateien)
+in `ubuntu-26.04/GNOME_RD_Troubleshooting_Dokumentation.docx`.
 
 ---
 
