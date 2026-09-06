@@ -123,19 +123,29 @@ for unit in xvfb.service qgis.service qgis-server@.service qgis-server@.socket; 
 done
 
 # =============================================================================
-section "8. GNOME Remote Desktop-Konfiguration"
+section "8. xrdp-Konfiguration"
 # =============================================================================
 
-if command -v grdctl &>/dev/null; then
-    log "Sichere GNOME-Remote-Desktop-Konfiguration ..."
-    mkdir -p "${BACKUP_DIR}/etc/gnome-remote-desktop"
-    # TLS-Zertifikat + Key (grdctl-Credentials selbst NICHT sichern -- Klartext-
-    # Zugangsdaten gehoeren nicht in ein Backup-Archiv; nach einem Restore
-    # einfach neu setzen: grdctl --system rdp set-credentials <user> <pass>)
-    GRD_CERT_DIR="/var/lib/gnome-remote-desktop/.local/share/gnome-remote-desktop"
-    cp "${GRD_CERT_DIR}/tls.crt" "${BACKUP_DIR}/etc/gnome-remote-desktop/" 2>/dev/null || true
-    cp "${GRD_CERT_DIR}/tls.key" "${BACKUP_DIR}/etc/gnome-remote-desktop/" 2>/dev/null || true
-    grdctl --system status > "${BACKUP_DIR}/etc/gnome-remote-desktop/status.txt" 2>/dev/null || true
+if command -v xrdp &>/dev/null || dpkg -l xrdp 2>/dev/null | grep -q '^ii'; then
+    log "Sichere xrdp-Konfiguration ..."
+    mkdir -p "${BACKUP_DIR}/etc/xrdp"
+    # /etc/xrdp/*.ini (Port, Session-Einstellungen) sowie das TLS-Zertifikat.
+    # RDP_USER-Passwort selbst NICHT sichern -- das ist ein normales System-
+    # Login-Passwort (chpasswd), kein separates grdctl-Credential-Paar mehr.
+    cp /etc/xrdp/xrdp.ini "${BACKUP_DIR}/etc/xrdp/" 2>/dev/null || true
+    cp /etc/xrdp/sesman.ini "${BACKUP_DIR}/etc/xrdp/" 2>/dev/null || true
+    cp /etc/xrdp/cert.pem "${BACKUP_DIR}/etc/xrdp/" 2>/dev/null || true
+    cp /etc/xrdp/key.pem "${BACKUP_DIR}/etc/xrdp/" 2>/dev/null || true
+    # ~/.xsession-Dateien aller lokalen User sichern (steuert die RDP-Desktop-
+    # Session — ohne diese Datei fällt xrdp nach einem Restore sonst wieder
+    # auf die Wayland-Systemsession zurück und die Session bricht sofort ab).
+    mkdir -p "${BACKUP_DIR}/home-xsessions"
+    for home_dir in /home/*; do
+        [ -f "${home_dir}/.xsession" ] || continue
+        user_name=$(basename "${home_dir}")
+        cp "${home_dir}/.xsession" "${BACKUP_DIR}/home-xsessions/${user_name}.xsession" 2>/dev/null || true
+    done
+    systemctl status xrdp xrdp-sesman > "${BACKUP_DIR}/etc/xrdp/status.txt" 2>/dev/null || true
 fi
 
 # =============================================================================
@@ -150,7 +160,7 @@ log "Speichere System-Informationen ..."
     lsb_release -a 2>/dev/null
     echo ""
     echo "--- Installierte Pakete (relevant) ---"
-    dpkg -l | grep -E "qgis|nginx|php|postgresql|gnome-remote-desktop|supervisor|python3" | awk '{print $2, $3}'
+    dpkg -l | grep -E "qgis|nginx|php|postgresql|xrdp|xfce4|supervisor|python3" | awk '{print $2, $3}'
     echo ""
     echo "--- py-qgis-server ---"
     /opt/local/py-qgis-server/bin/pip show py-qgis-server 2>/dev/null
@@ -159,7 +169,7 @@ log "Speichere System-Informationen ..."
     supervisorctl status 2>/dev/null
     echo ""
     echo "--- Dienste ---"
-    systemctl is-active nginx php8.5-fpm xvfb supervisor postgresql gnome-remote-desktop 2>/dev/null
+    systemctl is-active nginx php8.5-fpm xvfb supervisor postgresql xrdp xrdp-sesman 2>/dev/null
     echo ""
     echo "--- Lizmap Plugin API ---"
     curl -s http://127.0.0.1:7200/lizmap/server.json 2>/dev/null | python3 -m json.tool

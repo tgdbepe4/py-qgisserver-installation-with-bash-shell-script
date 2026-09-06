@@ -17,9 +17,10 @@
 #   - Lizmap Web Client (see LIZMAP_VERSION below)
 #   - Nginx + PHP-FPM
 #   - PostgreSQL + PostGIS (optional)
-#   - GNOME Remote Desktop (nativer RDP-Server, optional, Port 3389) — KEIN
-#     xfce4, KEIN xrdp-Paket. Nutzt das auf der Maschine bereits vorhandene
-#     Ubuntu Desktop (GNOME). Siehe INSTALL_GNOME_RDP unten.
+#   - xrdp + XFCE4 (RDP-Server, optional, Port 3389) — eigene virtuelle
+#     X11-Session pro Verbindung (xorgxrdp), unabhängig vom lokalen
+#     Display/Monitor und vom lokalen Wayland/GNOME-Login. Siehe
+#     INSTALL_XRDP unten.
 #   - pgAdmin4 Desktop (optional, nutzbar über die GNOME-Remote-Desktop-Session)
 #   - QGIS Desktop GUI-Paket ("qgis" + qgis-plugin-grass), optional
 #     (siehe INSTALL_QGIS_DESKTOP unten) — Firefox ist im bestehenden Ubuntu
@@ -32,8 +33,8 @@
 #     da qgis.org/ubuntu-ltr nur amd64 baut (kein "LTR"-Tag auf ARM).
 #   - pgAdmin4 Desktop: wird auf ARM übersprungen (Herstellerrepo bietet
 #     dort keine Pakete) — PostgreSQL selbst ist davon nicht betroffen.
-#   - GNOME Remote Desktop, PHP, PostgreSQL, Nginx und py-qgis-server sind
-#     auf arm64 nativ verfügbar.
+#   - xrdp/XFCE4, PHP, PostgreSQL, Nginx und py-qgis-server sind auf arm64
+#     nativ verfügbar.
 #   - Nicht auf echter ARM-Hardware getestet — vor Produktivbetrieb einmal
 #     komplett durchlaufen lassen und mit check_installation.sh prüfen.
 # =============================================================================
@@ -55,24 +56,32 @@ INSTALL_POSTGRESQL=true       # Set to false to skip PostgreSQL
 PG_LIZMAP_DB="lizmap"
 PG_LIZMAP_USER="lizmap"
 PG_LIZMAP_PASS="${PG_LIZMAP_PASS:-lizmap_secret_$(openssl rand -hex 6)}"
-INSTALL_GNOME_RDP=true        # Nutzt den in GNOME (Ubuntu Desktop, bereits vorhanden)
-                              # eingebauten RDP-Server (gnome-remote-desktop /
-                              # grdctl) — KEIN xfce4, KEIN xrdp-Paket, kein
-                              # zusätzliches Desktop-Environment. Setzt voraus,
-                              # dass Ubuntu Desktop (GNOME, gdm) bereits installiert
-                              # ist. Funktioniert headless (auch ohne dass sich
-                              # vorher jemand lokal einloggt), ab GNOME 46 /
-                              # Ubuntu 24.04+ — auf 26.04 also problemlos.
-                              # RAM-Hinweis (kleine VMs, z.B. 2 vCPU/4 GB):
-                              # GNOME Remote Desktop + Firefox + pgAdmin4-Desktop
-                              # zusammen mit QGIS Server/PostgreSQL sind bei nur
-                              # 4 GB eng. Bei 4 GB: INSTALL_GNOME_RDP=false
+INSTALL_XRDP=true             # Installiert xrdp + xorgxrdp + XFCE4 als eigener
+                              # RDP-Server. Läuft unabhängig vom lokalen Display-
+                              # Manager (gdm/lightdm) und vom lokalen Wayland/
+                              # GNOME-Login — startet pro Verbindung eine eigene
+                              # virtuelle X11-Session, funktioniert daher
+                              # zuverlässig auch headless (kein Monitor
+                              # angeschlossen). Ubuntu 26.04 hat "GNOME on Xorg"
+                              # entfernt (GNOME ist reines Wayland) — GNOME
+                              # Remote Desktop im "--system"-Modus kann ohne
+                              # physischen Monitor keinen Bildschirminhalt mehr
+                              # liefern (schwarzes Bild); xrdp umgeht das, da es
+                              # nie auf die lokale GNOME-Session angewiesen ist.
+                              # Falls am Server manchmal ein Monitor angeschlossen
+                              # wird: gdm bleibt unangetastet und bietet dann
+                              # zusätzlich XFCE als Session-Option neben GNOME am
+                              # lokalen Login-Screen an.
+                              # RAM-Hinweis (kleine VMs, z.B. 2 vCPU/4 GB): xrdp +
+                              # XFCE4 ist deutlich leichter als eine volle GNOME-
+                              # Session; zusammen mit QGIS Server/PostgreSQL bei
+                              # nur 4 GB dennoch eng. Bei 4 GB: INSTALL_XRDP=false
                               # erwägen (QGIS Server/Lizmap laufen unabhängig davon
                               # normal weiter, nur kein Desktop per RDP). Ab 6-8 GB
                               # sollte true unproblematisch sein.
 INSTALL_QGIS_DESKTOP=true     # "qgis" (Desktop-GUI, inkl. qgis-plugin-grass) wird
-                              # mitinstalliert und ist über die GNOME-Remote-
-                              # Desktop-Session (siehe INSTALL_GNOME_RDP) nutzbar.
+                              # mitinstalliert und ist über die xrdp/XFCE-Session
+                              # (siehe INSTALL_XRDP) nutzbar.
 RDP_USER="gisadmin"           # Dedicated RDP user (created if missing)
 RDP_PASS="${RDP_PASS:-GisAdmin_$(openssl rand -hex 4)}"  # Auto-generated, shown at end
 RDP_PORT=3389
@@ -1522,19 +1531,26 @@ systemctl enable nginx
 systemctl restart nginx
 log "Nginx configured."
 
-# ---- GNOME Remote Desktop (nativer RDP-Server, kein xfce4/xrdp) -------------
-if [[ "$INSTALL_GNOME_RDP" == "true" ]]; then
-    section "10. GNOME Remote Desktop (nativer RDP-Zugriff, kein xfce4/xrdp)"
+# ---- xrdp + XFCE4 (eigene virtuelle X11-Session, unabhängig von GNOME) -----
+if [[ "$INSTALL_XRDP" == "true" ]]; then
+    section "10. xrdp + XFCE4 (RDP-Zugriff via eigener X11-Session)"
 
-    if ! command -v gdm3 &>/dev/null && ! systemctl list-unit-files 2>/dev/null | grep -q '^gdm\.service'; then
-        warn "gdm.service nicht gefunden — es sieht so aus, als wäre kein Ubuntu"
-        warn "Desktop/GNOME installiert. GNOME Remote Desktop benötigt GNOME (gdm)."
-        warn "Installiere z.B. 'ubuntu-desktop-minimal' zuerst, oder setze"
-        warn "INSTALL_GNOME_RDP=false und nutze SSH/X11-Forwarding stattdessen."
+    # Falls aus einem älteren Lauf noch GNOME Remote Desktop aktiv ist: zuerst
+    # deaktivieren, sonst Port-Konflikt auf 3389.
+    if systemctl list-unit-files 2>/dev/null | grep -q '^gnome-remote-desktop\.service'; then
+        systemctl disable --now gnome-remote-desktop 2>/dev/null || true
     fi
 
-    apt-get install -y -qq gnome-remote-desktop winpr-utils \
-        || error "gnome-remote-desktop-Installation fehlgeschlagen."
+    # DEBIAN_FRONTEND=noninteractive verhindert, dass ein Debconf-Dialog nach
+    # dem Standard-Display-Manager fragt (xfce4 zieht lightdm als Recommends);
+    # ein bereits aktiver gdm bleibt dabei unangetastet.
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+        xrdp xorgxrdp xfce4 xfce4-goodies \
+        yaru-theme-gtk yaru-theme-icon yaru-theme-sound \
+        || error "xrdp/XFCE4-Installation fehlgeschlagen."
+
+    # xrdp braucht Zugriff auf das TLS-Zertifikat der ssl-cert-Gruppe
+    adduser xrdp ssl-cert 2>/dev/null || true
 
     # ---- Dedicated RDP user --------------------------------------------------
     if ! id "${RDP_USER}" &>/dev/null; then
@@ -1553,64 +1569,40 @@ if [[ "$INSTALL_GNOME_RDP" == "true" ]]; then
     chmod -R g+rw "${QGIS_PROJECTS_DIR}"
     chmod g+s "${QGIS_PROJECTS_DIR}"
 
+    # ---- XFCE als RDP-Session festlegen --------------------------------------
+    # WICHTIG: Jeder Linux-Benutzer, der sich per RDP anmelden soll, braucht
+    # seine EIGENE, ausführbare ~/.xsession-Datei — sonst fällt xrdp auf die
+    # System-Standardsession zurück (i.d.R. GNOME/Wayland), die unter der
+    # virtuellen xorgxrdp-X11-Session sofort wieder beendet wird ("Window
+    # manager exited quickly (1 secs)" im xrdp-sesman-Log). Das gilt auch für
+    # bereits bestehende Accounts (z.B. den SSH-Login-User), nicht nur für den
+    # hier neu angelegten RDP_USER — für weitere User dasselbe manuell nachholen:
+    #   echo "xfce4-session" > ~/.xsession && chmod +x ~/.xsession
+    echo "xfce4-session" > "/home/${RDP_USER}/.xsession"
+    chown "${RDP_USER}:${RDP_USER}" "/home/${RDP_USER}/.xsession"
+    chmod +x "/home/${RDP_USER}/.xsession"
+
     # Damit RDP_USER-Sessions auch ohne vorherigen physischen Login starten
     # bleiben (wichtig für headless/VM-Betrieb ohne lokalen Monitor).
     loginctl enable-linger "${RDP_USER}" 2>/dev/null || true
 
-    # ---- System-weiter GNOME-Remote-Desktop-Dienst (Multi-User, headless) ----
-    # "--system"-Modus: RDP-Zugriff direkt auf den GDM-Loginscreen bzw. auf
-    # bestehende Nutzer-Sessions, unabhängig davon ob sich vorher lokal jemand
-    # angemeldet hat. Läuft unter dem Systemkonto "gnome-remote-desktop".
-    #
-    # WICHTIG (Zwei-Stufen-Anmeldung): Diese Credentials sind nur der
-    # "Türsteher" für die erste RDP-Verbindung — die eigentliche Desktop-
-    # Session danach erfordert einen ECHTEN Linux-Benutzer-Login (z.B. den
-    # oben angelegten RDP_USER, oder einen bestehenden Account). grdctl
-    # speichert immer nur EIN Credential-Paar; ein erneuter set-credentials-
-    # Aufruf überschreibt das vorherige vollständig.
-    GRD_CERT_DIR="/var/lib/gnome-remote-desktop/.local/share/gnome-remote-desktop"
-    mkdir -p "${GRD_CERT_DIR}"
-
-    if [ ! -f "${GRD_CERT_DIR}/tls.key" ] || [ ! -f "${GRD_CERT_DIR}/tls.crt" ]; then
-        winpr-makecert -rdp -path "${GRD_CERT_DIR}" -n tls -silent >/dev/null 2>&1 \
-            || openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
-                   -keyout "${GRD_CERT_DIR}/tls.key" \
-                   -out    "${GRD_CERT_DIR}/tls.crt" \
-                   -subj "/CN=${SERVER_NAME%% *}/O=GIS Server/C=US" 2>/dev/null
-    fi
-    chown -R gnome-remote-desktop:gnome-remote-desktop "${GRD_CERT_DIR}" 2>/dev/null || \
-        chown -R gnome-remote-desktop:$(id -gn gnome-remote-desktop 2>/dev/null || echo gnome-remote-desktop) "${GRD_CERT_DIR}" 2>/dev/null || true
-    chmod 600 "${GRD_CERT_DIR}/tls.key" 2>/dev/null || true
-
-    grdctl --system rdp set-tls-key  "${GRD_CERT_DIR}/tls.key"
-    grdctl --system rdp set-tls-cert "${GRD_CERT_DIR}/tls.crt"
-    # Direkt als Argumente übergeben (zuverlässiger als eine stdin-Pipe-
-    # Variante, die in der Praxis Username/Passwort auf "(null)" stehen lässt
-    # statt sie zu übernehmen). WICHTIG: RDP_PASS darf NUR ASCII-Zeichen
-    # enthalten (keine Umlaute ä/ö/ü/ß) — ein bekannter FreeRDP-Bug lässt bei
-    # Nicht-ASCII-Passwörtern die NTLM-MIC-Prüfung fehlschlagen
-    # ("Message Integrity Check (MIC) verification failed!", FreeRDP #8599).
-    grdctl --system rdp set-credentials "${RDP_USER}" "${RDP_PASS}"
-    grdctl --system rdp enable
-
-    # Standard-RDP-Port ist bei GNOME Remote Desktop fest 3389 (nicht per
-    # grdctl konfigurierbar) — RDP_PORT bleibt hier informativ für Firewall/Doku.
+    # Im Gegensatz zu GNOME Remote Desktop ist der Port bei xrdp per Config
+    # änderbar.
     if [[ "${RDP_PORT}" != "3389" ]]; then
-        warn "GNOME Remote Desktop nutzt fest Port 3389 (kein Port-Umstellen via grdctl möglich)."
-        warn "RDP_PORT=${RDP_PORT} wird für die Firewall-Regel dennoch verwendet — bitte anpassen falls abweichend."
+        sed -i "s/^port=3389/port=${RDP_PORT}/" /etc/xrdp/xrdp.ini
     fi
 
-    systemctl enable --now gdm.service 2>/dev/null || warn "gdm.service konnte nicht aktiviert werden (bereits aktiv oder nicht installiert?)."
-    systemctl enable --now gnome-remote-desktop.service
+    systemctl enable --now xrdp
+    systemctl enable --now xrdp-sesman 2>/dev/null || true
 
-    log "GNOME Remote Desktop (RDP) konfiguriert auf Port 3389. Desktop: GNOME (bereits vorhanden, kein xfce4)."
-    log "Zum späteren Prüfen: grdctl --system status --show-credentials"
-    log "macOS-Client (Windows App): 'use redirection server name:i:1' in der .rdp-Konfiguration setzen (Export -> editieren -> Re-Import), sonst bricht die Verbindung nach der ersten Anmeldung sofort ab."
+    log "xrdp (RDP) konfiguriert auf Port ${RDP_PORT}. Desktop: XFCE4 (Yaru-Theme installiert — Einstellungen > Erscheinungsbild > Yaru für einen Ubuntu-ähnlichen Look)."
+    log "Zum späteren Prüfen: sudo systemctl status xrdp xrdp-sesman"
+    log "Logs bei Verbindungsproblemen: /var/log/xrdp.log und /var/log/xrdp-sesman.log"
+    log "Anmeldung ist einstufig mit einem ECHTEN Linux-Benutzer und dessen Systempasswort (z.B. ${RDP_USER}) — kein separates NLA-Zugangsdaten-Paar wie bei GNOME Remote Desktop nötig."
 fi
 
 # ---- pgAdmin4 Desktop --------------------------------------------------------
-# Installed nach GNOME Remote Desktop — pgadmin4-desktop selbst wird nicht mehr
-# gegen einen zusätzlich installierten Display-Manager abgesichert (siehe unten).
+# Nutzbar über die xrdp/XFCE-Session (siehe INSTALL_XRDP oben).
 if [[ "$INSTALL_POSTGRESQL" == "true" ]]; then
     section "10b. pgAdmin4 Desktop"
 
@@ -1635,13 +1627,10 @@ if [[ "$INSTALL_POSTGRESQL" == "true" ]]; then
         DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
             --no-install-recommends pgadmin4-desktop
 
-        # HINWEIS: Frühere Skriptversion (xRDP-Variante) purgte hier gdm3/
-        # lightdm/sddm, falls pgadmin4-desktop sie als Abhängigkeit zog, um
-        # xRDP zu schützen. Das entfällt jetzt bewusst — gdm.service wird von
-        # GNOME Remote Desktop selbst benötigt und darf NICHT gelöscht werden.
-        # Falls pgadmin4-desktop einen zusätzlichen Display-Manager zieht,
-        # bleibt er einfach bestehen (Ubuntu Desktop regelt die Priorität
-        # zwischen mehreren Display-Managern selbst über debconf).
+        # pgadmin4-desktop kann als Abhängigkeit lightdm ziehen — das ist für
+        # xrdp unproblematisch, da xrdp komplett unabhängig vom lokalen
+        # Display-Manager arbeitet (siehe INSTALL_XRDP oben). Ein bereits
+        # aktiver gdm bleibt unangetastet.
 
         log "pgAdmin4 Desktop installed — launch via RDP: Applications > Development > pgAdmin 4"
     else
@@ -1657,8 +1646,8 @@ if [[ "$INSTALL_SECURITY" == "true" ]]; then
     if command -v ufw &>/dev/null; then
         ufw allow OpenSSH
         ufw allow 'Nginx Full'
-        if [[ "$INSTALL_GNOME_RDP" == "true" ]]; then
-            ufw allow "3389/tcp" comment "GNOME Remote Desktop (RDP)"
+        if [[ "$INSTALL_XRDP" == "true" ]]; then
+            ufw allow "${RDP_PORT}/tcp" comment "xrdp (RDP)"
         fi
         ufw --force enable
         log "UFW firewall configured."
@@ -1764,12 +1753,12 @@ echo " pgAdmin4           : Desktop-App (RDP > Applications > Development)"
 echo " (save the password — shown only once)"
 echo "------------------------------------------------------------"
 fi
-if [[ "$INSTALL_GNOME_RDP" == "true" ]]; then
+if [[ "$INSTALL_XRDP" == "true" ]]; then
 echo " Remote Desktop     : ${PUBLIC_IP}:${RDP_PORT}  (RDP / mstsc)"
 echo " RDP user           : ${RDP_USER}"
 echo " RDP password       : ${RDP_PASS}"
 echo " (save this password — shown only once)"
-echo " Desktop            : GNOME (bereits vorhandenes Ubuntu Desktop)"
+echo " Desktop            : XFCE4 (Yaru-Theme installiert)"
 echo " QGIS Desktop       : available inside RDP session (falls INSTALL_QGIS_DESKTOP=true)"
 echo "------------------------------------------------------------"
 fi
@@ -1792,8 +1781,8 @@ echo "   PHP-FPM    : /var/log/php8.5-fpm.log"
 echo "   QGIS Server: journalctl -u 'qgis-server@*.service'"
 echo "   Xvfb       : journalctl -u xvfb.service"
 echo "   Supervisor : /var/log/supervisor/py-qgisserver*.log"
-if [[ "$INSTALL_GNOME_RDP" == "true" ]]; then
-echo "   GNOME RDP  : journalctl -u gnome-remote-desktop.service"
+if [[ "$INSTALL_XRDP" == "true" ]]; then
+echo "   xrdp       : /var/log/xrdp.log, /var/log/xrdp-sesman.log"
 fi
 if [[ "$INSTALL_SECURITY" == "true" ]]; then
 echo "   Fail2ban   : /var/log/fail2ban.log"
@@ -1805,17 +1794,16 @@ echo "============================================================"
 echo ""
 echo "Next steps:"
 echo "  1. Log in at http://${PUBLIC_IP}/ and change the Lizmap admin password"
-if [[ "$INSTALL_GNOME_RDP" == "true" ]]; then
+if [[ "$INSTALL_XRDP" == "true" ]]; then
 echo "  2. Connect via RDP (Windows App / mstsc / Remmina) to ${PUBLIC_IP}:${RDP_PORT}"
-echo "     WICHTIG (macOS Windows App): 'use redirection server name:i:1' in der"
-echo "     .rdp-Konfiguration setzen (Export -> editieren -> Re-Import), sonst"
-echo "     bricht die Verbindung nach der ersten Anmeldung sofort ab."
+echo "     Login direkt mit einem echten Linux-User + Systempasswort (z.B. ${RDP_USER})."
+echo "     Weitere User brauchen vorher eine eigene ~/.xsession (siehe oben)."
 echo "  3. Open QGIS Desktop in the RDP session to author .qgs/.qgz projects"
 else
 echo "  2. Projekt-Authoring erfolgt auf deinem Mac/Windows-PC in QGIS Desktop —"
 echo "     .qgs/.qgz-Projekte anschließend nach ${QGIS_PROJECTS_DIR} übertragen"
 echo "     (z.B. per SFTP/scp, Samba-Freigabe, oder git). Kein RDP/Desktop auf"
-echo "     diesem Server installiert (INSTALL_GNOME_RDP=false)."
+echo "     diesem Server installiert (INSTALL_XRDP=false)."
 fi
 echo "  4. Save projects to: ${QGIS_PROJECTS_DIR}"
 echo "  5. Install the Lizmap QGIS plugin inside QGIS Desktop (lokal) to configure"

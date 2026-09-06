@@ -41,9 +41,13 @@ eines **Lizmap Web Client + py-qgis-server**-Stacks auf **Ubuntu 24.04 LTS**.
 
 Für Ubuntu 26.04 LTS (u. a. arm64/Apple-Silicon-VMs, getestet via VMware Fusion auf Apple M4)
 liegt eine eigenständige Skript-Variante im Unterverzeichnis `ubuntu-26.04/`. Sie basiert auf
-demselben Stack wie die 24.04-Version, ersetzt aber **xRDP + XFCE4 durch GNOME Remote Desktop**
-(`gnome-remote-desktop` / `grdctl`) — kein zusätzliches Desktop-Environment nötig, da Ubuntu
-26.04 Desktop-Installationen bereits GNOME/gdm mitbringen.
+demselben Stack wie die 24.04-Version und nutzt für den Remote-Zugriff wie diese **xRDP + XFCE4**
+(gleiche Variablen: `RDP_USER`/`RDP_PASS`/`RDP_PORT`/`INSTALL_XRDP`).
+
+Zwischenzeitlich (Sommer 2026) wurde stattdessen **GNOME Remote Desktop** (`gnome-remote-desktop`
+/ `grdctl`) eingesetzt, um kein zusätzliches Desktop-Environment installieren zu müssen — das
+wurde nach ausführlicher Fehlersuche auf einem produktiven Server wieder verworfen (Details siehe
+Abschnitt "Warum wieder xRDP?" unten).
 
 | Skript | Zweck |
 |---|---|
@@ -51,48 +55,51 @@ demselben Stack wie die 24.04-Version, ersetzt aber **xRDP + XFCE4 durch GNOME R
 | `install_lizmap_qgisserver_2cpu_26.04.sh` | Kleine VMs (2 vCPU / 4-8 GB RAM) |
 | `install_lizmap_qgisserver_8cpu_26.04.sh` | 8 CPU-Kerne (4 Worker) |
 | `install_lizmap_qgisserver_16cpu_26.04.sh` | 16 CPU-Kerne (8 Worker) |
-| `install_lizmap_qgisserver_no_desktop_26.04.sh` | `INSTALL_GNOME_RDP`/`INSTALL_QGIS_DESKTOP` standardmässig `false` |
+| `install_lizmap_qgisserver_no_desktop_26.04.sh` | Wie 2cpu-Variante, für kleine VMs optimiert (`INSTALL_XRDP`/`INSTALL_QGIS_DESKTOP` weiterhin `true`, aber xRDP+XFCE4 statt einer vollen Desktop-Umgebung — spart RAM) |
 | `check_installation_26.04.sh` | Diagnose + `--fix` |
 | `backup_lizmap_system_26.04.sh` | Backup |
-| `GNOME_RD_Troubleshooting_Dokumentation.docx` | Vollständige Fehlersuche-Historie (siehe unten) |
+| `GNOME_RD_Troubleshooting_Dokumentation.docx` | Fehlersuche-Historie inkl. Update-Kapitel zur Rückkehr zu xRDP (siehe unten) |
 
-**Neue/geänderte Variablen gegenüber der 24.04-Variante:**
+Variablen, Konfiguration und die `~/.xsession`-Falle bei weiteren RDP-Benutzern sind identisch
+zur 24.04-Variante — siehe [Konfiguration](#konfiguration) und [xRDP: weitere Benutzer
+anlegen](#xrdp-weitere-benutzer-anlegen) oben.
 
-| Variable | Ersetzt | Beschreibung |
-|---|---|---|
-| `INSTALL_GNOME_RDP` | `INSTALL_XRDP` | GNOME Remote Desktop statt xRDP+XFCE4 installieren |
-| `INSTALL_QGIS_DESKTOP` | *(neu)* | QGIS-Desktop-GUI-Paket (`qgis` + `qgis-plugin-grass`) zusätzlich zu QGIS Server installieren |
-| `RDP_USER` | `XRDP_USER` | Dedizierter Linux-Benutzer **und** grdctl-"Türsteher"-Username (siehe Zwei-Stufen-Anmeldung unten) |
-| `RDP_PASS` | `XRDP_PASS` | Muss reines ASCII sein — bekannter FreeRDP-Bug lässt die NTLM-MIC-Prüfung bei Umlauten (ä/ö/ü/ß) fehlschlagen |
-| `RDP_PORT` | `XRDP_PORT` | Bei GNOME Remote Desktop fest auf `3389`, nicht per `grdctl` änderbar |
+### Warum wieder xRDP? (GNOME Remote Desktop verworfen)
 
-### Zwei-Stufen-Anmeldung bei GNOME Remote Desktop
+GNOME Remote Desktop im `--system`-Modus wurde eine Zeit lang anstelle von xRDP eingesetzt, um
+kein zusätzliches Desktop-Environment installieren zu müssen (Ubuntu-Desktop-Installationen
+bringen GNOME ohnehin schon mit). Auf einem produktiven Server (HP ProDesk 600 G3, Ubuntu 26.04,
+ohne dauerhaft angeschlossenen Monitor) zeigten sich zwei Show-Stopper:
 
-Zentraler Unterschied zu xRDP, der bei der Fehlersuche den grössten Teil ausmachte: GNOME Remote
-Desktop im `--system`-Modus verwendet **zwei unabhängige Zugangsdaten-Systeme**:
+1. **Ubuntu 26.04 hat die "GNOME on Xorg"-Session entfernt** — GNOME läuft nur noch unter
+   Wayland. Damit entfällt auch der frühere Xorg-Fallback für den Fall, dass etwas mit der
+   Wayland-Remote-Anzeige nicht funktioniert.
+2. **Ohne physisch angeschlossenen Monitor liefert GNOME Remote Desktop im `--system`-Modus kein
+   Bild** (schwarzer Bildschirm nach erfolgreichem Login) — der Modus spiegelt praktisch den
+   physischen GDM-Loginscreen und braucht dafür einen tatsächlichen GPU-Ausgang.
 
-1. **`grdctl --system rdp set-credentials`** — reiner "Türsteher" für die erste RDP-Verbindung.
-   Frei gewähltes Username/Passwort-Paar in einer GKeyFile, kein Linux-Account. Speichert immer
-   nur ein Paar — ein erneuter Aufruf überschreibt das vorherige vollständig.
-2. **Echter Linux-Login** — nach erfolgreicher Stufe 1 leitet der Server ("Sending server
-   redirection") zur eigentlichen GNOME-Desktop-Session weiter, wofür ein echter Linux-
-   Systembenutzer mit echtem Login-Passwort nötig ist.
+Zusätzlich verwendete GNOME Remote Desktop eine **Zwei-Stufen-Anmeldung** (ein reines
+`grdctl`-"Türsteher"-Credential-Paar für die erste RDP-Verbindung, danach ein echter
+Linux-Login für die eigentliche Session) und war anfällig für einen bekannten FreeRDP-NTLM-
+"Message Integrity Check (MIC) verification failed"-Fehler.
 
-Das Installationsskript legt in Sektion 10 beides mit denselben Werten an (`RDP_USER`/`RDP_PASS`
-werden sowohl als Linux-Account als auch als grdctl-Credentials verwendet) — das funktioniert,
-sollte aber aus Sicherheitssicht nach der Installation typischerweise auf zwei unabhängige
-Werte umgestellt werden (`grdctl --system rdp set-credentials <anderer_user> <anderes_passwort>`).
+xRDP baut dagegen pro Verbindung eine **eigene virtuelle X11-Session** über `xorgxrdp` auf —
+komplett unabhängig vom lokalen Display, Monitor, Display-Manager (gdm/lightdm) oder
+Wayland/GNOME-Login. Das funktioniert headless zuverlässig, ist einstufig (ein normaler
+Linux-Login, keine separaten NLA-Zugangsdaten), und XFCE4 ist zudem leichter als eine volle
+GNOME-Session. Einzige eigene Falle: die pro Benutzer nötige `~/.xsession` (siehe oben) — ohne
+sie fällt xRDP auf die (Wayland-)Systemsession zurück, die sofort wieder abbricht.
 
-**macOS-Client (Windows App, ehem. Microsoft Remote Desktop):** Folgt der Server-Redirection aus
-Stufe 2 standardmässig **nicht**. Fix: gespeicherte Verbindung exportieren (`.rdp`-Datei), darin
-`use redirection server name:i:0` auf `i:1` ändern, re-importieren. Ohne diese Einstellung bricht
-die Verbindung mit `ERRINFO_LOGOFF_BY_USER` sofort nach der ersten Anmeldung ab.
+Ein bereits angeschlossener Monitor (z.B. für gelegentliche lokale Nutzung) bleibt davon
+unberührt: gdm läuft unverändert weiter und bietet nach der xRDP/XFCE4-Installation zusätzlich
+XFCE als Session-Option neben GNOME am lokalen Login-Screen an.
 
-Vollständige Diagnose-Historie (inkl. Fehlercodes 0x204/0x207, MIC-Verification-Bug, dem
-gdm3-Purge-Bug im pgAdmin4-Abschnitt, dem 0-Byte-Lizmap-Deployment-Problem samt
-PHP-OPcache-Fallstrick, sowie fehlenden jcache-Profilen in `profiles.ini.php` inkl. Jelix-
-Kompilierungs-Cache und eines Terminal-Korruptions-Phänomens beim Nachbearbeiten von Dateien)
-in `ubuntu-26.04/GNOME_RD_Troubleshooting_Dokumentation.docx`.
+Vollständige Diagnose-Historie beider Phasen (inkl. Fehlercodes 0x204/0x207, MIC-Verification-Bug,
+dem gdm3-Purge-Bug im pgAdmin4-Abschnitt, dem 0-Byte-Lizmap-Deployment-Problem samt
+PHP-OPcache-Fallstrick, fehlenden jcache-Profilen in `profiles.ini.php` inkl. Jelix-
+Kompilierungs-Cache, eines Terminal-Korruptions-Phänomens beim Nachbearbeiten von Dateien, sowie
+dem finalen Umstieg zurück auf xRDP mit der `~/.xsession`-Diagnose per `xrdp-sesman.log`) in
+`ubuntu-26.04/GNOME_RD_Troubleshooting_Dokumentation.docx`.
 
 ---
 
@@ -500,11 +507,16 @@ sudo adduser rdpuser
 sudo passwd rdpuser
 echo "xfce4-session" > /home/rdpuser/.xsession
 sudo chown rdpuser:rdpuser /home/rdpuser/.xsession
+sudo chmod +x /home/rdpuser/.xsession
 ```
 
 Die Datei `~/.xsession` legt die Desktop-Sitzung für diesen Benutzer explizit auf XFCE4 fest.
-Ohne sie versucht xrdp/Xsession eine Sitzung anders zu bestimmen, was hier zu einer
-nicht startenden RDP-Sitzung führte — getestet und bestätigt auf dem produktiven Server.
+Ohne sie fällt xrdp auf die System-Standardsession zurück (i.d.R. GNOME/Wayland), die unter der
+virtuellen xorgxrdp-X11-Session sofort wieder beendet wird — RDP-Client zeigt dann "öffnet kurz
+und schliesst gleich wieder" bzw. im `xrdp-sesman`-Log `Window manager exited quickly (1 secs)`.
+Das `chmod +x` ist ebenso zwingend wie die Datei selbst: eine vorhandene, aber nicht ausführbare
+`.xsession` erzeugt exakt denselben Fehler — getestet und bestätigt auf dem produktiven Server
+(sowohl fehlende Datei als auch fehlendes Ausführbit reproduziert).
 
 ---
 

@@ -72,7 +72,8 @@ check_service "php${PHP_VERSION}-fpm"
 check_service xvfb
 check_service supervisor
 check_service postgresql  optional
-check_service gnome-remote-desktop optional
+check_service xrdp optional
+check_service xrdp-sesman optional
 
 # Supervisor-Prozess py-qgisserver
 PY_STATUS=$(supervisorctl status py-qgisserver 2>/dev/null)
@@ -107,7 +108,7 @@ check_port 80   "Nginx HTTP"
 check_port 443  "Nginx HTTPS"       optional   # HTTPS ist optional
 check_port 7200 "py-qgis-server"
 check_port 5432 "PostgreSQL"        optional
-check_port 3389 "GNOME Remote Desktop" optional
+check_port 3389 "xrdp (RDP)" optional
 
 # =============================================================================
 section "3. py-qgis-server"
@@ -917,56 +918,72 @@ if [ -x "${PLUGIN_MGR_BIN}" ]; then
 fi
 
 # =============================================================================
-section "10. GNOME Remote Desktop"
+section "10. xrdp (RDP-Zugriff via eigener X11-Session)"
 # =============================================================================
 
+# Alte GNOME-Remote-Desktop-Installation aus einem früheren Skriptlauf?
+# Beide belegen Port 3389 — kann nicht parallel mit xrdp laufen.
 if systemctl is-active --quiet gnome-remote-desktop 2>/dev/null; then
-    OK "GNOME Remote Desktop aktiv"
+    fail "gnome-remote-desktop läuft noch (alte Skriptversion) — Port-Konflikt mit xrdp auf 3389"
+    INFO "  → sudo systemctl disable --now gnome-remote-desktop"
+    if $FIX_MODE; then
+        FIX "Deaktiviere gnome-remote-desktop ..."
+        systemctl disable --now gnome-remote-desktop 2>/dev/null && OK "  deaktiviert" || FAIL "  fehlgeschlagen"
+    fi
+fi
 
-    # gdm.service wird von GNOME Remote Desktop im --system-Modus zwingend
-    # benötigt -- anders als bei xRDP früher, wo ein zusätzlicher Display-
-    # Manager (gdm3) Probleme verursachte. Bei GNOME RD ist das umgekehrt:
-    # gdm.service MUSS laufen, sonst funktioniert der Remote-Zugriff nicht.
-    if systemctl is-active --quiet gdm 2>/dev/null; then
-        OK "gdm.service aktiv ✓ (von GNOME Remote Desktop benötigt)"
+if systemctl is-active --quiet xrdp 2>/dev/null; then
+    OK "xrdp aktiv"
+
+    if systemctl is-active --quiet xrdp-sesman 2>/dev/null; then
+        OK "xrdp-sesman aktiv"
     else
-        fail "gdm.service NICHT aktiv — GNOME Remote Desktop benötigt gdm im --system-Modus!"
-        INFO "  → systemctl enable --now gdm.service"
+        fail "xrdp-sesman NICHT aktiv — RDP-Sessions können nicht gestartet werden"
+        INFO "  → systemctl enable --now xrdp-sesman"
         if $FIX_MODE; then
-            FIX "Starte gdm.service ..."
-            systemctl enable --now gdm.service 2>/dev/null && OK "  gestartet" || FAIL "  fehlgeschlagen"
+            FIX "Starte xrdp-sesman ..."
+            systemctl enable --now xrdp-sesman 2>/dev/null && OK "  gestartet" || FAIL "  fehlgeschlagen"
         fi
     fi
 
-    # grdctl-Backend-Status + Zugangsdaten prüfen
-    GRD_STATUS=$(grdctl --system status --show-credentials 2>/dev/null)
-    if echo "${GRD_STATUS}" | grep -q "Status: enabled"; then
-        OK "grdctl: RDP-Backend enabled"
+    # xrdp ist unabhängig vom lokalen Display-Manager (gdm/lightdm) — dessen
+    # Zustand ist hier bewusst kein Prüfkriterium.
+
+    if dpkg -l xfce4 2>/dev/null | grep -q '^ii'; then
+        OK "XFCE4 installiert"
     else
-        fail "grdctl: RDP-Backend nicht enabled"
-        INFO "  → grdctl --system rdp enable"
+        fail "XFCE4 nicht installiert — xrdp braucht eine X11-fähige Desktop-Umgebung"
+        INFO "  → sudo apt install -y xfce4 xfce4-goodies"
     fi
 
-    GRD_USER=$(echo "${GRD_STATUS}" | grep -oP '(?<=^Username: ).*')
-    GRD_PASS=$(echo "${GRD_STATUS}" | grep -oP '(?<=^Password: ).*')
-    if [ -z "${GRD_USER}" ] || [ "${GRD_USER}" = "(null)" ]; then
-        fail "grdctl: Keine Zugangsdaten gesetzt (Username: (null))"
-        INFO "  → grdctl --system rdp set-credentials <user> <passwort>"
-        INFO "  → WICHTIG: Argumente direkt übergeben, NICHT per stdin-Pipe (bekannter Bug, ließ Username/Passwort bisher auf \"(null)\" stehen)"
-    else
-        OK "grdctl: Zugangsdaten gesetzt (Username: ${GRD_USER})"
-        # Nicht-ASCII-Zeichen im Passwort prüfen — bekannter FreeRDP-Bug lässt
-        # die NTLM-MIC-Verifikation dabei fehlschlagen (FreeRDP-Issue #8599).
-        if echo "${GRD_PASS}" | LC_ALL=C grep -qP '[^\x00-\x7F]'; then
-            fail "grdctl: RDP-Passwort enthält Nicht-ASCII-Zeichen (z.B. Umlaute)"
-            INFO "  → Bekannter FreeRDP-Bug: NTLM-MIC-Verification schlägt dabei fehl (FreeRDP-Issue #8599)"
-            INFO "  → grdctl --system rdp set-credentials ${GRD_USER} '<reines-ascii-passwort>'"
-        else
-            OK "grdctl: RDP-Passwort ist reines ASCII ✓"
+    # Jeder RDP-Login-User braucht eine eigene, ausführbare ~/.xsession — ohne
+    # die fällt xrdp auf die (Wayland-)Systemsession zurück, die sich unter
+    # der virtuellen xorgxrdp-X11-Session sofort wieder beendet ("Window
+    # manager exited quickly" im xrdp-sesman-Log).
+    XSESSION_ISSUES=0
+    for home_dir in /home/*; do
+        [ -d "${home_dir}" ] || continue
+        user_name=$(basename "${home_dir}")
+        id "${user_name}" &>/dev/null || continue
+        if [ -f "${home_dir}/.xsession" ]; then
+            if [ -x "${home_dir}/.xsession" ]; then
+                OK "~${user_name}/.xsession vorhanden und ausführbar"
+            else
+                fail "~${user_name}/.xsession vorhanden, aber NICHT ausführbar"
+                INFO "  → chmod +x ${home_dir}/.xsession"
+                XSESSION_ISSUES=$((XSESSION_ISSUES + 1))
+                if $FIX_MODE; then
+                    FIX "Setze Ausführbit für ${home_dir}/.xsession ..."
+                    chmod +x "${home_dir}/.xsession" && OK "  gesetzt" || FAIL "  fehlgeschlagen"
+                fi
+            fi
         fi
+    done
+    if [ "${XSESSION_ISSUES}" -eq 0 ]; then
+        :
     fi
 else
-    INFO "GNOME Remote Desktop nicht aktiv (optional)"
+    INFO "xrdp nicht aktiv (optional)"
 fi
 
 # =============================================================================
@@ -1052,7 +1069,7 @@ fi
 echo ""
 echo -e "  ${CYAN}Nützliche Befehle:${NC}"
 echo "  supervisorctl status"
-echo "  systemctl status nginx php${PHP_VERSION}-fpm xvfb gnome-remote-desktop postgresql"
+echo "  systemctl status nginx php${PHP_VERSION}-fpm xvfb xrdp xrdp-sesman postgresql"
 echo "  tail -50 /var/log/supervisor/py-qgisserver-err.log"
 echo "  tail -50 /var/log/nginx/lizmap-error.log"
 echo "  journalctl -u xvfb -n 20"

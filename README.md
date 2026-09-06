@@ -29,32 +29,44 @@ Für **Ubuntu 26.04 LTS** (u. a. arm64/Apple-Silicon-VMs) liegt im Unterverzeich
 | `install_lizmap_qgisserver_2cpu_26.04.sh` | Für kleine VMs (2 vCPU / 4-8 GB RAM) |
 | `install_lizmap_qgisserver_8cpu_26.04.sh` | Voreingestellt für 8 CPU-Kerne (4 Worker) |
 | `install_lizmap_qgisserver_16cpu_26.04.sh` | Voreingestellt für 16 CPU-Kerne (8 Worker) |
-| `install_lizmap_qgisserver_no_desktop_26.04.sh` | Wie Basis-Skript, aber `INSTALL_GNOME_RDP`/`INSTALL_QGIS_DESKTOP` standardmässig `false` — für Server ohne jedes Remote-Desktop-Bedürfnis |
+| `install_lizmap_qgisserver_no_desktop_26.04.sh` | Für kleine VMs (2 vCPU/4-8 GB), optimiert auf minimalen RAM-Verbrauch — `INSTALL_XRDP`/`INSTALL_QGIS_DESKTOP` weiterhin standardmässig `true`, aber `xrdp`+`XFCE4` statt einer vollen Desktop-Umgebung |
 | `check_installation_26.04.sh` | Diagnose + optionale Fehlerkorrektur (`--fix`) |
 | `backup_lizmap_system_26.04.sh` | Backup aller Konfigurationen und Daten |
-| `GNOME_RD_Troubleshooting_Dokumentation.docx` | Ausführliche Fehlersuche-Dokumentation: VMware-Fusion-Crash-Diagnose, Umstieg auf GNOME Remote Desktop, alle dabei gefundenen Bugs und deren Fixes |
+| `GNOME_RD_Troubleshooting_Dokumentation.docx` | Fehlersuche-Historie: VMware-Fusion-Crash-Diagnose, der (mittlerweile wieder verworfene) Umstieg auf GNOME Remote Desktop und die Gründe für die Rückkehr zu xRDP — siehe Update-Kapitel am Ende des Dokuments |
 
-**Wichtigster Unterschied zu den Root-Skripten:** Statt **xRDP + XFCE4** wird standardmässig
-**GNOME Remote Desktop** (`gnome-remote-desktop` / `grdctl`) für den Remote-Zugriff verwendet —
-kein zusätzliches Desktop-Environment nötig, da Ubuntu 26.04 Desktop-Installationen bereits GNOME
-mitbringen. Details, Hintergründe und alle aufgetretenen Stolpersteine (u. a. eine **Zwei-Stufen-
-Anmeldung** bei GNOME Remote Desktop, ein bekannter FreeRDP-Bug bei Nicht-ASCII-Passwörtern, und die
-nötige `use redirection server name:i:1`-Einstellung für die macOS "Windows App") stehen in
+**Wichtigster Unterschied zu den Root-Skripten:** keiner mehr — die 26.04-Variante nutzt wie die
+Root-Skripte **xRDP + XFCE4** für den Remote-Zugriff (`RDP_USER`/`RDP_PASS`/`RDP_PORT`, gleiche
+Variablennamen wie unten unter "Konfiguration").
+
+Ein zwischenzeitlicher Versuch, stattdessen **GNOME Remote Desktop** (`gnome-remote-desktop` /
+`grdctl`) zu verwenden — um kein zusätzliches Desktop-Environment installieren zu müssen, da Ubuntu
+26.04 Desktop-Installationen bereits GNOME mitbringen — wurde wieder verworfen:
+
+- Ubuntu 26.04 hat die **"GNOME on Xorg"-Session entfernt**, GNOME läuft nur noch unter Wayland.
+- GNOME Remote Desktop im `--system`-Modus (headless, ohne vorherigen physischen Login) liefert
+  ohne **tatsächlich angeschlossenen Monitor kein Bild** (schwarzer Bildschirm) — für einen
+  Server ohne Monitor damit unbrauchbar.
+
+xRDP baut pro Verbindung eine eigene virtuelle X11-Session auf (`xorgxrdp`) und ist dadurch
+unabhängig vom lokalen Display/Monitor und vom lokalen Wayland/GNOME-Login — funktioniert headless
+zuverlässig, und ist zusätzlich leichter als eine volle GNOME-Session. Details, Hintergründe und
+alle aufgetretenen Stolpersteine (u. a. die verworfene GNOME-RD-Zwei-Stufen-Anmeldung, der bekannte
+FreeRDP-NTLM-MIC-Bug, und die xRDP-eigene Falle mit fehlender `~/.xsession`) stehen in
 [`ubuntu-26.04/GNOME_RD_Troubleshooting_Dokumentation.docx`](ubuntu-26.04/GNOME_RD_Troubleshooting_Dokumentation.docx).
 
-Relevante Variablen im Skript-Header (ersetzen `INSTALL_XRDP`/`XRDP_*` aus der 24.04-Variante):
+Relevante Variablen im Skript-Header (identisch zur 24.04-Variante):
 
 ```bash
-INSTALL_GNOME_RDP=true        # GNOME Remote Desktop statt xRDP+XFCE4
+INSTALL_XRDP=true             # xRDP + XFCE4 für Remote-Zugriff
 INSTALL_QGIS_DESKTOP=true     # QGIS-Desktop-GUI-Paket (qgis + qgis-plugin-grass)
 RDP_USER="gisadmin"
-RDP_PASS="..."                # auto-generiert, muss reines ASCII sein (siehe Doku)
-RDP_PORT=3389                 # bei GNOME Remote Desktop fest, nicht änderbar
+RDP_PASS="..."                # auto-generiert
+RDP_PORT=3389                 # bei xRDP per Config änderbar (/etc/xrdp/xrdp.ini)
 ```
 
-> **macOS-Client-Hinweis:** Die "Windows App" (ehem. Microsoft Remote Desktop) folgt der
-> GNOME-RD-internen Session-Weiterleitung standardmässig nicht. In der exportierten `.rdp`-Datei
-> `use redirection server name:i:0` auf `i:1` ändern und re-importieren — siehe Doku, Abschnitt 6.
+> **Weitere RDP-Benutzer:** wie bei den Root-Skripten reicht ein einfaches `adduser` nicht — jeder
+> zusätzliche Linux-User braucht eine eigene, ausführbare `~/.xsession` mit `xfce4-session`, sonst
+> bricht die RDP-Sitzung sofort wieder ab. Siehe [CLAUDE.md](CLAUDE.md#xrdp-weitere-benutzer-anlegen).
 
 ## Skripte
 
