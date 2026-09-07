@@ -49,6 +49,14 @@ CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"  # Set via env var to enable automatic HTTPS 
                               #   export CERTBOT_EMAIL=you@example.com
                               #   curl -s <raw-script-url> | sudo -E bash
                               # Leave unset to skip certbot (configure manually later)
+INSTALL_CONVMV_TIMER=false    # Set to true if media/upload files reach this server via a Mac
+                              # hop (e.g. ForkLift Ubuntu -> Mac -> Ubuntu): macOS normalizes
+                              # filenames with umlauts/special characters to Unicode NFD, but
+                              # Linux/PHP (and Lizmap's getMedia route) expect NFC, causing
+                              # 404s for files with such names despite them existing on disk.
+                              # Installs a systemd timer that normalizes QGIS_PROJECTS_DIR to
+                              # NFC every 15 minutes. See README.md "Bekannte Probleme und
+                              # Lösungen" for background and the manual one-off fix.
 LOG_FILE="/var/log/install_lizmap_qgisserver.log"
 # -----------------------------------------------------------------------------
 
@@ -1539,6 +1547,63 @@ else
         warn "certbot failed — DNS für ${CERTBOT_DOMAIN} zeigt möglicherweise nicht auf diesen Server."
         warn "Manuell ausführen: certbot --nginx -d ${CERTBOT_DOMAIN}"
     fi
+fi
+
+# ---- convmv NFD->NFC timer (optional) ----------------------------------------
+# See README.md "Bekannte Probleme und Lösungen" -> Umlaute in Dateinamen nach
+# Mac-Synchronisation. Only relevant if media files reach this server via a Mac.
+if [[ "${INSTALL_CONVMV_TIMER}" == "true" ]]; then
+    section "13. convmv NFD->NFC Timer (Umlaute nach Mac-Sync)"
+
+    apt-get install -y -qq convmv || error "convmv-Installation fehlgeschlagen."
+
+    cat > /usr/local/bin/convmv-nfc-watch.sh <<EOF
+#!/bin/bash
+set -euo pipefail
+
+# Verzeichnisse, die regelmässig auf NFC normalisiert werden sollen
+TARGETS=(
+    "${QGIS_PROJECTS_DIR}"
+)
+
+for dir in "\${TARGETS[@]}"; do
+    if [ -d "\${dir}" ]; then
+        echo "Normalisiere Dateinamen (NFD->NFC) unter \${dir} ..."
+        convmv -f utf8 -t utf8 --nfc -r --notest "\${dir}"
+    else
+        echo "WARNUNG: \${dir} existiert nicht, übersprungen."
+    fi
+done
+EOF
+    chmod +x /usr/local/bin/convmv-nfc-watch.sh
+
+    cat > /etc/systemd/system/convmv-nfc.service <<EOF
+[Unit]
+Description=Normalisiert Dateinamen (NFD->NFC) unter ${QGIS_PROJECTS_DIR}
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/convmv-nfc-watch.sh
+EOF
+
+    cat > /etc/systemd/system/convmv-nfc.timer <<EOF
+[Unit]
+Description=Regelmässige NFD->NFC-Normalisierung für ${QGIS_PROJECTS_DIR}
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable --now convmv-nfc.timer
+
+    log "convmv-nfc.timer aktiv — normalisiert ${QGIS_PROJECTS_DIR} alle 15 Minuten auf NFC."
+    log "Kontrolle: journalctl -u convmv-nfc.service -n 30 --no-pager / systemctl list-timers convmv-nfc.timer"
 fi
 
 # ---- Summary -----------------------------------------------------------------

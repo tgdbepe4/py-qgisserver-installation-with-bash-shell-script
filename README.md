@@ -559,13 +559,14 @@ journalctl -u convmv-nfc.service -n 30 --no-pager
 systemctl list-timers convmv-nfc.timer
 ```
 
-**Empfehlung fürs Installationsskript:**
-- Den `convmv`-Timer (Skript + Service + Timer) optional als Bestandteil der
-  Server-Installation anbieten, wenn der Server Medien-Uploads über einen Mac-Zwischenschritt
-  erhält.
-- Langfristig/alternativ: Wo möglich den Mac-Umweg beim Sync vermeiden und stattdessen direkt
-  zwischen den Ubuntu-Systemen syncen (z.B. `rsync -av -e ssh`) — dabei tritt das Problem gar
-  nicht erst auf, da kein macOS-System beteiligt ist, das normalisieren könnte.
+**Automatisch bei der Installation:** Der obige Timer (Skript + Service + Timer) wird vom
+Installationsskript optional mit eingerichtet — `INSTALL_CONVMV_TIMER=true` im Skript-Header
+setzen, falls der Server Medien-Uploads über einen Mac-Zwischenschritt erhält (Standard:
+`false`, siehe [Konfiguration](CLAUDE.md#anpassbare-variablen-skript-header)).
+
+Langfristig/alternativ: Wo möglich den Mac-Umweg beim Sync vermeiden und stattdessen direkt
+zwischen den Ubuntu-Systemen syncen (z.B. `rsync -av -e ssh`) — dabei tritt das Problem gar
+nicht erst auf, da kein macOS-System beteiligt ist, das normalisieren könnte.
 
 ## Referenzen
 

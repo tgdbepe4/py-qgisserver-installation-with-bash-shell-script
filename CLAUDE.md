@@ -272,6 +272,7 @@ Abschnitt "QGIS Server Plugins") — ein reines `apt upgrade` von `qgis-server` 
 | `XRDP_PORT` | `3389` | RDP-Port |
 | `INSTALL_SECURITY` | `true` | UFW + Fail2ban installieren (`true`/`false`) |
 | `CERTBOT_EMAIL` | *(leer, liest Env-Variable)* | E-Mail für Let's Encrypt — nicht im Skript editieren, per `export CERTBOT_EMAIL=... ; sudo -E bash ...` setzen. Leer + Terminal vorhanden = interaktive Rückfrage; leer ohne Terminal = HTTPS überspringen. Siehe [HTTPS einrichten](#https-einrichten) |
+| `INSTALL_CONVMV_TIMER` | `false` | systemd-Timer installieren, der `QGIS_PROJECTS_DIR` alle 15 Min. auf Unicode NFC normalisiert (`true`/`false`) — nur relevant, wenn Medien-/Upload-Dateien über einen Mac synchronisiert werden. Siehe [README.md: Bekannte Probleme und Lösungen](README.md#bekannte-probleme-und-lösungen) |
 | `LOG_FILE` | `/var/log/install_lizmap_qgisserver.log` | Pfad zur Installationslogdatei |
 
 Passwörter bei Re-Run stabil halten:
