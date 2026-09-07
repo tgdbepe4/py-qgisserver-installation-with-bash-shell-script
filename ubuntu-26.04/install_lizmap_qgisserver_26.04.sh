@@ -1262,8 +1262,7 @@ fi  # end: fresh-install-only block
 # braucht [jcache:default]/[jcache:qgisprojects]/[jcache:requests] in profiles.ini.php
 # in jedem Fall (u.a. für Medien-Auslieferung und WFS-Requests) — im PostgreSQL-
 # Zweig oben werden sie zwar geschrieben, aber falls profiles.ini.php z.B. aus
-# einem älteren/unvollständigen Backup wiederhergestellt wurde (siehe
-# GNOME_RD_Troubleshooting_Dokumentation.docx, Abschnitt 8), können sie fehlen.
+# einem älteren/unvollständigen Backup wiederhergestellt wurde, können sie fehlen.
 # Ohne diese Sektionen schlägt Lizmap mit "Unknown profile ... for jcache" fehl
 # (HTTP 500), ohne dass Nginx oder PHP-FPM einen aussagekräftigen Fehler loggen.
 LIZMAP_PROFILES_INI="${LIZMAP_DIR}/lizmap/var/config/profiles.ini.php"
@@ -1296,8 +1295,7 @@ PROFILES
         chown "${LIZMAP_USER}:${LIZMAP_GROUP}" "${LIZMAP_PROFILES_INI}"
         # Datei-Integrität gegenprüfen: "file" muss ASCII/UTF-8-Text erkennen,
         # nicht "data" — ein bekanntes Problem beim Nachbearbeiten dieser Datei
-        # über manche Terminal-/RDP-Sitzungen (eingeschleuste Steuerzeichen,
-        # siehe GNOME_RD_Troubleshooting_Dokumentation.docx) kann sonst eine
+        # über manche Terminal-/RDP-Sitzungen (eingeschleuste Steuerzeichen) kann sonst eine
         # scheinbar korrekte, tatsächlich aber binär beschädigte Datei erzeugen.
         if file "${LIZMAP_PROFILES_INI}" | grep -qiv "text"; then
             error "profiles.ini.php ist nach dem Schreiben keine gültige Textdatei (file-Befehl meldet: $(file -b "${LIZMAP_PROFILES_INI}")) — evtl. Terminal-/Encoding-Problem beim Skript-Lauf. Datei manuell prüfen: file ${LIZMAP_PROFILES_INI}"

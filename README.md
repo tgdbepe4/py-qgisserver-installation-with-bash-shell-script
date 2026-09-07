@@ -57,10 +57,8 @@ Desktop-Installationen bereits GNOME mitbringen — wurde wieder verworfen:
 xRDP baut pro Verbindung eine eigene virtuelle X11-Session auf (`xorgxrdp`) und ist dadurch
 unabhängig vom lokalen Display/Monitor und vom lokalen Wayland/GNOME-Login — funktioniert headless
 zuverlässig, ist einstufig (ein normaler Linux-Login), und ist zusätzlich leichter als eine volle
-GNOME-Session. Details, Hintergründe und alle aufgetretenen Stolpersteine (u. a. die verworfene
-GNOME-RD-Zwei-Stufen-Anmeldung, der FreeRDP-NTLM-MIC-Bug, und die xRDP-eigene Falle mit fehlender
-`~/.xsession`) stehen in
-[`GNOME_RD_Troubleshooting_Dokumentation.docx`](GNOME_RD_Troubleshooting_Dokumentation.docx) im Projekt-Root.
+GNOME-Session. Die xRDP-eigene Falle mit fehlender `~/.xsession` ist unter
+[CLAUDE.md: xRDP – weitere Benutzer anlegen](CLAUDE.md#xrdp-weitere-benutzer-anlegen) dokumentiert.
 
 ## Was wird installiert
 

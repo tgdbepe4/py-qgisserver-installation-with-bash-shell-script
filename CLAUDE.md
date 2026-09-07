@@ -41,9 +41,6 @@ Unterverzeichnis [`ubuntu-26.04/`](ubuntu-26.04/).
 | `check_installation_26.04.sh` | Diagnose + `--fix` |
 | `backup_lizmap_system_26.04.sh` | Backup |
 
-`GNOME_RD_Troubleshooting_Dokumentation.docx` (Fehlersuche-Historie inkl. Update-Kapitel zur
-Rückkehr zu xRDP, siehe unten) liegt im Projekt-Root, nicht in diesem Unterordner.
-
 ---
 
 ## Ubuntu 24.04 Version (`ubuntu-24.04/`)
@@ -87,13 +84,6 @@ sie fällt xRDP auf die (Wayland-)Systemsession zurück, die sofort wieder abbri
 Ein bereits angeschlossener Monitor (z.B. für gelegentliche lokale Nutzung) bleibt davon
 unberührt: gdm läuft unverändert weiter und bietet nach der xRDP/XFCE4-Installation zusätzlich
 XFCE als Session-Option neben GNOME am lokalen Login-Screen an.
-
-Vollständige Diagnose-Historie beider Phasen (inkl. Fehlercodes 0x204/0x207, MIC-Verification-Bug,
-dem gdm3-Purge-Bug im pgAdmin4-Abschnitt, dem 0-Byte-Lizmap-Deployment-Problem samt
-PHP-OPcache-Fallstrick, fehlenden jcache-Profilen in `profiles.ini.php` inkl. Jelix-
-Kompilierungs-Cache, eines Terminal-Korruptions-Phänomens beim Nachbearbeiten von Dateien, sowie
-dem finalen Umstieg zurück auf xRDP mit der `~/.xsession`-Diagnose per `xrdp-sesman.log`) in
-`GNOME_RD_Troubleshooting_Dokumentation.docx` im Projekt-Root.
 
 ---
 
