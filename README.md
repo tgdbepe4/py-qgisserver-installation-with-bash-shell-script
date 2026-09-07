@@ -35,7 +35,6 @@ der Fokus der aktiven Weiterentwicklung liegt aber auf der hier beschriebenen 26
 | `install_lizmap_qgisserver_no_desktop_26.04.sh` | Für kleine VMs (2 vCPU/4-8 GB), optimiert auf minimalen RAM-Verbrauch — `INSTALL_XRDP`/`INSTALL_QGIS_DESKTOP` weiterhin standardmässig `true`, aber `xrdp`+`XFCE4` statt einer vollen Desktop-Umgebung |
 | `check_installation_26.04.sh` | Diagnose + optionale Fehlerkorrektur (`--fix`) |
 | `backup_lizmap_system_26.04.sh` | Backup aller Konfigurationen und Daten |
-| `GNOME_RD_Troubleshooting_Dokumentation.docx` | Fehlersuche-Historie: VMware-Fusion-Crash-Diagnose, der (mittlerweile wieder verworfene) Umstieg auf GNOME Remote Desktop und die Gründe für die Rückkehr zu xRDP — siehe Update-Kapitel am Ende des Dokuments |
 
 Andere Hardware → [Worker Rechner](worker_rechner.html) öffnen, Werte berechnen lassen, dann `QGIS_WORKER_COUNT` im Skript-Header anpassen.
 
@@ -61,7 +60,7 @@ zuverlässig, ist einstufig (ein normaler Linux-Login), und ist zusätzlich leic
 GNOME-Session. Details, Hintergründe und alle aufgetretenen Stolpersteine (u. a. die verworfene
 GNOME-RD-Zwei-Stufen-Anmeldung, der FreeRDP-NTLM-MIC-Bug, und die xRDP-eigene Falle mit fehlender
 `~/.xsession`) stehen in
-[`ubuntu-26.04/GNOME_RD_Troubleshooting_Dokumentation.docx`](ubuntu-26.04/GNOME_RD_Troubleshooting_Dokumentation.docx).
+[`GNOME_RD_Troubleshooting_Dokumentation.docx`](GNOME_RD_Troubleshooting_Dokumentation.docx) im Projekt-Root.
 
 ## Was wird installiert
 

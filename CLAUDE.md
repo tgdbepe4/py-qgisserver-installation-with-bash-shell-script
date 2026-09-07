@@ -40,7 +40,9 @@ Unterverzeichnis [`ubuntu-26.04/`](ubuntu-26.04/).
 | `install_lizmap_qgisserver_no_desktop_26.04.sh` | Wie 2cpu-Variante, für kleine VMs optimiert (`INSTALL_XRDP`/`INSTALL_QGIS_DESKTOP` weiterhin `true`, aber xRDP+XFCE4 statt einer vollen Desktop-Umgebung — spart RAM) |
 | `check_installation_26.04.sh` | Diagnose + `--fix` |
 | `backup_lizmap_system_26.04.sh` | Backup |
-| `GNOME_RD_Troubleshooting_Dokumentation.docx` | Fehlersuche-Historie inkl. Update-Kapitel zur Rückkehr zu xRDP (siehe unten) |
+
+`GNOME_RD_Troubleshooting_Dokumentation.docx` (Fehlersuche-Historie inkl. Update-Kapitel zur
+Rückkehr zu xRDP, siehe unten) liegt im Projekt-Root, nicht in diesem Unterordner.
 
 ---
 
@@ -91,7 +93,7 @@ dem gdm3-Purge-Bug im pgAdmin4-Abschnitt, dem 0-Byte-Lizmap-Deployment-Problem s
 PHP-OPcache-Fallstrick, fehlenden jcache-Profilen in `profiles.ini.php` inkl. Jelix-
 Kompilierungs-Cache, eines Terminal-Korruptions-Phänomens beim Nachbearbeiten von Dateien, sowie
 dem finalen Umstieg zurück auf xRDP mit der `~/.xsession`-Diagnose per `xrdp-sesman.log`) in
-`ubuntu-26.04/GNOME_RD_Troubleshooting_Dokumentation.docx`.
+`GNOME_RD_Troubleshooting_Dokumentation.docx` im Projekt-Root.
 
 ---
 
