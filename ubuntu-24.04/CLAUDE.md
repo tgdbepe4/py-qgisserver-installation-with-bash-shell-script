@@ -1,4 +1,9 @@
-# Lizmap + py-qgis-server — Projektdokumentation
+# Lizmap + py-qgis-server — Projektdokumentation (Ubuntu 24.04 LTS)
+
+> **Hinweis:** Dies ist die Ubuntu-24.04-Version dieses Projekts. Die aktuell empfohlene
+> Standardversion ist **Ubuntu 26.04 LTS** — siehe das [Haupt-README](../README.md) bzw.
+> [Haupt-CLAUDE.md](../CLAUDE.md) im Projekt-Root und den Ordner [`ubuntu-26.04/`](../ubuntu-26.04/).
+> Diese 24.04-Version wird weiterhin unterstützt, erhält aber keine neuen Features mehr.
 
 ## Vorwort
 
@@ -7,8 +12,7 @@ betreiben möchten — ohne tiefgreifende Linux- oder GIS-Serverkenntnisse vorau
 
 Ziel ist es, den gesamten Stack aus **QGIS Server**, **Lizmap Web Client** und allen
 notwendigen Diensten (Nginx, PHP, PostgreSQL, xRDP) mit einem einzigen Skript vollständig
-und reproduzierbar auf einem frischen **Ubuntu 26.04 LTS**-Server aufzusetzen (u. a.
-arm64/Apple-Silicon-VMs, getestet via VMware Fusion auf Apple M4).
+und reproduzierbar auf einem frischen **Ubuntu 24.04 LTS**-Server aufzusetzen.
 
 **Typische Anwendungsfälle:**
 - Gemeinden, Planungsbüros oder Organisationen, die QGIS-Projekte im Browser veröffentlichen wollen
@@ -27,71 +31,14 @@ Vorkenntnisse: grundlegende Linux-Kenntnisse (SSH, Texteditor) genügen.
 
 ## Übersicht
 
-Dieses Repository enthält Skripte zur vollautomatischen Installation und Diagnose
-eines **Lizmap Web Client + py-qgis-server**-Stacks auf **Ubuntu 26.04 LTS**, im
-Unterverzeichnis [`ubuntu-26.04/`](ubuntu-26.04/).
+Dieses Verzeichnis enthält Skripte zur vollautomatischen Installation und Diagnose
+eines **Lizmap Web Client + py-qgis-server**-Stacks auf **Ubuntu 24.04 LTS**.
 
 | Skript | Zweck |
 |---|---|
-| `install_lizmap_qgisserver_26.04.sh` | Basis-Skript |
-| `install_lizmap_qgisserver_2cpu_26.04.sh` | Kleine VMs (2 vCPU / 4-8 GB RAM) |
-| `install_lizmap_qgisserver_8cpu_26.04.sh` | 8 CPU-Kerne (4 Worker) |
-| `install_lizmap_qgisserver_16cpu_26.04.sh` | 16 CPU-Kerne (8 Worker) |
-| `install_lizmap_qgisserver_no_desktop_26.04.sh` | Wie 2cpu-Variante, für kleine VMs optimiert (`INSTALL_XRDP`/`INSTALL_QGIS_DESKTOP` weiterhin `true`, aber xRDP+XFCE4 statt einer vollen Desktop-Umgebung — spart RAM) |
-| `check_installation_26.04.sh` | Diagnose + `--fix` |
-| `backup_lizmap_system_26.04.sh` | Backup |
-| `GNOME_RD_Troubleshooting_Dokumentation.docx` | Fehlersuche-Historie inkl. Update-Kapitel zur Rückkehr zu xRDP (siehe unten) |
-
----
-
-## Ubuntu 24.04 Version (`ubuntu-24.04/`)
-
-Die ursprüngliche, weiterhin unterstützte Skript-Variante für **Ubuntu 24.04 LTS** liegt im
-Unterverzeichnis [`ubuntu-24.04/`](ubuntu-24.04/) — siehe
-[`ubuntu-24.04/CLAUDE.md`](ubuntu-24.04/CLAUDE.md) für die dortige Projektdokumentation. Sie
-basiert auf demselben Stack, nutzt ebenfalls xRDP + XFCE4 für den Remote-Zugriff (dort allerdings
-mit `XRDP_USER`/`XRDP_PASS`/`XRDP_PORT` statt `RDP_USER`/`RDP_PASS`/`RDP_PORT`), hat kein
-`INSTALL_QGIS_DESKTOP`-Flag (QGIS Desktop ist dort immer Teil der Installation) und läuft mit
-PHP 8.3 statt 8.5. Neue Features wie der [convmv-Timer](#anpassbare-variablen-skript-header)
-werden in beiden Varianten gepflegt; der Fokus der aktiven Weiterentwicklung liegt aber auf der
-hier beschriebenen 26.04-Version.
-
-### Warum xRDP statt GNOME Remote Desktop?
-
-GNOME Remote Desktop im `--system`-Modus wurde eine Zeit lang anstelle von xRDP eingesetzt, um
-kein zusätzliches Desktop-Environment installieren zu müssen (Ubuntu-Desktop-Installationen
-bringen GNOME ohnehin schon mit). Auf einem produktiven Server (HP ProDesk 600 G3, Ubuntu 26.04,
-ohne dauerhaft angeschlossenen Monitor) zeigten sich zwei Show-Stopper:
-
-1. **Ubuntu 26.04 hat die "GNOME on Xorg"-Session entfernt** — GNOME läuft nur noch unter
-   Wayland. Damit entfällt auch der frühere Xorg-Fallback für den Fall, dass etwas mit der
-   Wayland-Remote-Anzeige nicht funktioniert.
-2. **Ohne physisch angeschlossenen Monitor liefert GNOME Remote Desktop im `--system`-Modus kein
-   Bild** (schwarzer Bildschirm nach erfolgreichem Login) — der Modus spiegelt praktisch den
-   physischen GDM-Loginscreen und braucht dafür einen tatsächlichen GPU-Ausgang.
-
-Zusätzlich verwendete GNOME Remote Desktop eine **Zwei-Stufen-Anmeldung** (ein reines
-`grdctl`-"Türsteher"-Credential-Paar für die erste RDP-Verbindung, danach ein echter
-Linux-Login für die eigentliche Session) und war anfällig für einen bekannten FreeRDP-NTLM-
-"Message Integrity Check (MIC) verification failed"-Fehler.
-
-xRDP baut dagegen pro Verbindung eine **eigene virtuelle X11-Session** über `xorgxrdp` auf —
-komplett unabhängig vom lokalen Display, Monitor, Display-Manager (gdm/lightdm) oder
-Wayland/GNOME-Login. Das funktioniert headless zuverlässig, ist einstufig (ein normaler
-Linux-Login, keine separaten NLA-Zugangsdaten), und XFCE4 ist zudem leichter als eine volle
-GNOME-Session. Einzige eigene Falle: die pro Benutzer nötige `~/.xsession` (siehe unten) — ohne
-sie fällt xRDP auf die (Wayland-)Systemsession zurück, die sofort wieder abbricht.
-
-Ein bereits angeschlossener Monitor (z.B. für gelegentliche lokale Nutzung) bleibt davon
-unberührt: gdm läuft unverändert weiter und bietet nach der xRDP/XFCE4-Installation zusätzlich
-XFCE als Session-Option neben GNOME am lokalen Login-Screen an.
-
-Vollständige Diagnose-Historie beider Phasen (inkl. Fehlercodes 0x204/0x207, MIC-Verification-Bug,
-dem gdm3-Purge-Bug im pgAdmin4-Abschnitt, dem 0-Byte-Lizmap-Deployment-Problem samt
-PHP-OPcache-Fallstrick, fehlenden jcache-Profilen in `profiles.ini.php` inkl. Jelix-
-Kompilierungs-Cache, eines Terminal-Korruptions-Phänomens beim Nachbearbeiten von Dateien, sowie
-dem finalen Umstieg zurück auf xRDP mit der `~/.xsession`-Diagnose per `xrdp-sesman.log`) in
-`ubuntu-26.04/GNOME_RD_Troubleshooting_Dokumentation.docx`.
+| `install_lizmap_qgisserver.sh` | Vollinstallation |
+| `check_installation.sh` | Diagnose + optionale Fehlerkorrektur (`--fix`) |
+| `backup_lizmap_system.sh` | Backup aller Konfigurationen und Daten |
 
 ---
 
@@ -102,21 +49,16 @@ dem finalen Umstieg zurück auf xRDP mit der `~/.xsession`-Diagnose per `xrdp-se
 | Komponente | Version / Details |
 |---|---|
 | QGIS Server LTR | via offiziellem QGIS apt-Repository |
-| QGIS Desktop LTR | optional (`INSTALL_QGIS_DESKTOP`), für Projektbearbeitung via RDP |
+| QGIS Desktop LTR | für Projektbearbeitung via RDP |
 | py-qgis-server | 3liz Python WSGI-Wrapper für QGIS Server |
 | Lizmap Web Client | 3.9.9 |
-| Nginx | mit PHP 8.5-FPM |
+| Nginx | mit PHP 8.3-FPM |
 | PostgreSQL + PostGIS | optional (Standard: aktiviert) |
-| pgAdmin4 Desktop | optional, nutzbar über die xrdp/XFCE-Session (auf arm64 nicht verfügbar) |
+| pgAdmin4 Web | optional (unter `/pgadmin4`) |
 | xRDP + XFCE4 | Remote Desktop auf Port 3389 (optional) |
 | Xvfb | virtuelles Display `:99` für QGIS/Qt-Rendering |
 | certbot + python3-certbot-nginx | HTTPS via Let's Encrypt |
-| UFW + Fail2ban | Firewall + Brute-Force-Schutz (optional) — siehe [README.md: UFW-Anhang](README.md#anhang-ufw-firewall-verwalten) |
-
-> **ARM/Apple Silicon:** QGIS Desktop LTR und pgAdmin4 Desktop stehen auf arm64 nicht zur
-> Verfügung, da die jeweiligen Hersteller-Repos nur amd64 bauen (kein "LTR"-Tag auf ARM bzw. kein
-> arm64-Paket). QGIS Server selbst, PHP, PostgreSQL, Nginx und py-qgis-server sind auf arm64
-> nativ verfügbar.
+| UFW + Fail2ban | Firewall + Brute-Force-Schutz (optional) |
 
 ### QGIS Server Plugins
 
@@ -141,9 +83,8 @@ Plugins manuell aktualisieren (auf bestehendem System):
 ```bash
 export QGIS_PLUGINPATH=/srv/qgis/plugins
 
-# QGIS-Version ermitteln (dpkg-query liefert den reinen Versionsstring ohne
-# Tabellenformatierung — robuster als "dpkg -l | awk" bei Skript-/Piped-Läufen ohne TTY)
-QGIS_VER=$(dpkg-query -W -f='${Version}\n' qgis-server | grep -oP '\d+\.\d+' | head -1)
+# QGIS-Version ermitteln (Epoch-Präfix "1:" beachten → grep mitten im String)
+QGIS_VER=$(dpkg -l qgis-server | awk '/^ii.*qgis-server /{print $3}' | grep -oP '\d+\.\d+' | head -1)
 # sources.list mit Version setzen (qgis-plugin-manager 1.7.5 kennt kein --qgis-version Flag)
 echo "https://plugins.qgis.org/plugins/plugins.xml?qgis=${QGIS_VER}" > /srv/qgis/plugins/sources.list
 
@@ -160,14 +101,14 @@ supervisorctl restart py-qgisserver
 **Nicht** das Install-Skript mit neuer `LIZMAP_VERSION` erneut auf einem laufenden System ausführen —
 Sektion 8 macht bei Versionswechsel ein `rm -rf "${LIZMAP_DIR}"` und schreibt `lizmapConfig.ini.php`,
 `localconfig.ini.php` und `profiles.ini.php` aus den `.dist`-Vorlagen neu (siehe
-`install_lizmap_qgisserver_26.04.sh`, Abschnitt "8. Lizmap Web Client"). Angepasste Konfiguration
-ginge dabei verloren. Stattdessen der offizielle Lizmap-Upgrade-Pfad:
+`install_lizmap_qgisserver.sh`, Abschnitt "8. Lizmap Web Client"). Angepasste Konfiguration ginge
+dabei verloren. Stattdessen der offizielle Lizmap-Upgrade-Pfad:
 
 ```bash
 # 1. Backup
-# Aus dem ubuntu-26.04/-Verzeichnis ausführen (dort liegt backup_lizmap_system_26.04.sh) —
-# nicht /var/www/lizmap!
-sudo bash backup_lizmap_system_26.04.sh
+# Aus dem Repo-Verzeichnis ausführen (dort liegt backup_lizmap_system.sh),
+# z.B. ~/py-qgisserver-installation-with-bash-shell-script/ubuntu-24.04/ — nicht /var/www/lizmap!
+sudo bash backup_lizmap_system.sh
 
 # backup.sh legt das Zielverzeichnis NICHT selbst an — fehlt es, bricht es mit
 # "backup directory does not exists" ab, ohne etwas zu sichern.
@@ -222,11 +163,11 @@ supervisorctl restart py-qgisserver        # falls Supervisor vorhanden
 sudo systemctl restart qgis.service        # falls nicht (direkter systemd-Service)
 
 # 5. Dienste neu laden + prüfen
-systemctl reload php8.5-fpm nginx
-sudo bash check_installation_26.04.sh
+systemctl reload php8.3-fpm nginx
+sudo bash check_installation.sh
 ```
 
-> **Vorsicht mit `check_installation_26.04.sh --fix`:** Auf Servern, die von der Standard-Architektur
+> **Vorsicht mit `check_installation.sh --fix`:** Auf Servern, die von der Standard-Architektur
 > abweichen (kein Supervisor, andere Nginx-Struktur, `root` statt `qgis`-Systembenutzer), meldet das
 > Diagnoseskript teils vorbestehende, nicht update-bezogene Warnungen (Nginx-Vhost, PHP-Extensions,
 > xRDP, PostgreSQL, Verzeichnis-Owner). `--fix` ändert automatisiert Nginx/Rechte/Dienste — auf einem
@@ -236,10 +177,10 @@ Im Browser verifizieren (Login, Karte laden, `.../lizmap/admin/serverInformation
 Server-/Plugin-Versionen auf einen Blick). Danach aufräumen:
 ```bash
 rm -rf /var/www/lizmap.bak
-rm /root/lizmap_backup_*.tar.gz   # das backup_lizmap_system_26.04.sh-Archiv aus Schritt 1
+rm /root/lizmap_backup_*.tar.gz   # das backup_lizmap_system.sh-Archiv aus Schritt 1
 ```
 
-Anschliessend `LIZMAP_VERSION` im Skript-Header aller `_26.04.sh`-Varianten auf die neue Version
+Anschliessend `LIZMAP_VERSION` im Skript-Header aller Install-Skript-Varianten auf die neue Version
 anpassen, damit künftige Neuinstallationen den aktuellen Stand verwenden. Falls dabei auch QGIS Server
 auf eine neue Version gesprungen ist: `sources.list` für `qgis-plugin-manager` nachziehen (siehe oben,
 Abschnitt "QGIS Server Plugins") — ein reines `apt upgrade` von `qgis-server` aktualisiert diese Datei
@@ -256,7 +197,7 @@ Abschnitt "QGIS Server Plugins") — ein reines `apt upgrade` von `qgis-server` 
 | `LIZMAP_VERSION` | `3.9.9` | Lizmap Web Client Version |
 | `LIZMAP_DIR` | `/var/www/lizmap` | Installationspfad Lizmap |
 | `QGIS_PROJECTS_DIR` | `/srv/data` | Verzeichnis für QGIS-Projektdateien |
-| `QGIS_WORKER_COUNT` | `6` | Anzahl QGIS Server Worker-Instanzen (variiert je CPU-Variante) |
+| `QGIS_WORKER_COUNT` | `4` | Anzahl QGIS Server Worker-Instanzen |
 | `SERVER_NAME` | `localhost karte1.wandelderzeit.ch` | Domain oder IP des Servers |
 | `LIZMAP_USER` | `www-data` | Webserver-Benutzer (PHP-FPM / Nginx) |
 | `LIZMAP_GROUP` | `www-data` | Webserver-Gruppe |
@@ -265,11 +206,10 @@ Abschnitt "QGIS Server Plugins") — ein reines `apt upgrade` von `qgis-server` 
 | `PG_LIZMAP_USER` | `lizmap` | PostgreSQL Benutzername |
 | `PG_LIZMAP_PASS` | *(auto-generiert)* | PostgreSQL Passwort — stabil bei Re-Run wenn als Env-Variable exportiert |
 | `INSTALL_XRDP` | `true` | xRDP + XFCE4 installieren (`true`/`false`) |
-| `INSTALL_QGIS_DESKTOP` | `true` | QGIS-Desktop-GUI-Paket (`qgis` + `qgis-plugin-grass`) zusätzlich zu QGIS Server installieren |
-| `RDP_USER` | `gisadmin` | Dedizierter RDP-Benutzer |
-| `RDP_PASS` | *(auto-generiert)* | RDP-Passwort — stabil bei Re-Run wenn als Env-Variable exportiert. Muss reines ASCII sein (keine Umlaute) |
-| `RDP_PORT` | `3389` | RDP-Port — bei xRDP per `/etc/xrdp/xrdp.ini` änderbar |
-| `INSTALL_SECURITY` | `true` | UFW + Fail2ban installieren (`true`/`false`) — siehe [README.md: UFW-Anhang](README.md#anhang-ufw-firewall-verwalten) |
+| `XRDP_USER` | `gisadmin` | Dedizierter RDP-Benutzer |
+| `XRDP_PASS` | *(auto-generiert)* | RDP-Passwort — stabil bei Re-Run wenn als Env-Variable exportiert |
+| `XRDP_PORT` | `3389` | RDP-Port |
+| `INSTALL_SECURITY` | `true` | UFW + Fail2ban installieren (`true`/`false`) |
 | `CERTBOT_EMAIL` | *(leer, liest Env-Variable)* | E-Mail für Let's Encrypt — nicht im Skript editieren, per `export CERTBOT_EMAIL=... ; sudo -E bash ...` setzen. Leer + Terminal vorhanden = interaktive Rückfrage; leer ohne Terminal = HTTPS überspringen. Siehe [HTTPS einrichten](#https-einrichten) |
 | `INSTALL_CONVMV_TIMER` | `false` | systemd-Timer installieren, der `QGIS_PROJECTS_DIR` alle 15 Min. auf Unicode NFC normalisiert (`true`/`false`) — nur relevant, wenn Medien-/Upload-Dateien über einen Mac synchronisiert werden. Siehe [README.md: Bekannte Probleme und Lösungen](README.md#bekannte-probleme-und-lösungen) |
 | `LOG_FILE` | `/var/log/install_lizmap_qgisserver.log` | Pfad zur Installationslogdatei |
@@ -278,8 +218,8 @@ Passwörter bei Re-Run stabil halten:
 
 ```bash
 export PG_LIZMAP_PASS="mein-passwort"
-export RDP_PASS="mein-passwort"
-sudo -E bash install_lizmap_qgisserver_26.04.sh
+export XRDP_PASS="mein-passwort"
+sudo -E bash install_lizmap_qgisserver.sh
 ```
 
 **Optionale Umgebungsvariablen:**
@@ -327,7 +267,7 @@ sudo -E bash install_lizmap_qgisserver_26.04.sh
 [server]
 port = 7200
 interfaces = 127.0.0.1
-workers = 6                  # = QGIS_WORKER_COUNT
+workers = 4                  # = QGIS_WORKER_COUNT
 memory_high_water_mark = 0.8
 pluginpath = /srv/qgis/plugins
 timeout = 200
@@ -498,7 +438,7 @@ Fix für den IP-Zugriff nötig. `http://<IP>/` bleibt nach certbot weiterhin err
 
 ## xRDP: weitere Benutzer anlegen
 
-Der Standard-RDP-Benutzer (`RDP_USER`, siehe [Konfiguration](#konfiguration)) wird vom
+Der Standard-RDP-Benutzer (`XRDP_USER`, siehe [Konfiguration](#konfiguration)) wird vom
 Installationsskript vollständig eingerichtet (Gruppen `sudo`/`xrdp`/`qgis`, XFCE4-Session-
 Konfiguration). Legt man **danach** manuell einen weiteren Benutzer an (z.B. per `adduser`),
 reicht das allein nicht — die RDP-Sitzung startet für diesen Benutzer nicht. Zusätzlich nötig:
@@ -525,10 +465,10 @@ Das `chmod +x` ist ebenso zwingend wie die Datei selbst: eine vorhandene, aber n
 
 ```bash
 # Vollständige Prüfung
-sudo bash check_installation_26.04.sh
+sudo bash check_installation.sh
 
 # Prüfung + automatische Fehlerbehebung
-sudo bash check_installation_26.04.sh --fix
+sudo bash check_installation.sh --fix
 ```
 
 Was geprüft wird:
@@ -550,7 +490,7 @@ Was geprüft wird:
 | Dienst | Log |
 |---|---|
 | Nginx | `/var/log/nginx/lizmap-access.log`, `/var/log/nginx/lizmap-error.log` |
-| PHP-FPM | `/var/log/php8.5-fpm.log` |
+| PHP-FPM | `/var/log/php8.3-fpm.log` |
 | py-qgis-server | `/var/log/supervisor/py-qgisserver*.log` |
 | QGIS Worker | `journalctl -u 'qgis-server@*.service'` |
 | Xvfb | `journalctl -u xvfb.service` |

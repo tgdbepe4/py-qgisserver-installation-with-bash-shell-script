@@ -1,10 +1,10 @@
 # Lizmap Web Client + py-qgis-server — Installation Stack
 
-Das Projekt hat es zum Ziel eine komplette Lizmap-Umgebung auf einem Ubuntu 24.04 mit dem py-qgisserver zu installieren. Ausserdem postgres, das Hilfswerkzeug qgis-plugin-manager und eine Xfce4 Desktop-Umgebung.
+Das Projekt hat es zum Ziel eine komplette Lizmap-Umgebung auf einem Ubuntu 26.04 mit dem py-qgisserver zu installieren. Ausserdem postgres, das Hilfswerkzeug qgis-plugin-manager und eine Xfce4 Desktop-Umgebung.
 
 Diese Scripts wurden mit der KI claude.ai, der günstigsten Pro Version für kapp € 20.-, erstellt. Es brauchte unzählige Interaktionen bis alles sauber lief. Nun ist jedoch das Resultat überzeugend!
 
-Im Skript-Header `SERVER_NAME` auf die eigene Domain anpassen, `QGIS_WORKER_COUNT` auf die Hardware abstimmen (siehe [Worker-Konfiguration](#worker-konfiguration)), dann ausführen. Danach mit `check_installation.sh` prüfen, allenfalls mit `--fix` nachkorrigieren.
+Im Skript-Header `SERVER_NAME` auf die eigene Domain anpassen, `QGIS_WORKER_COUNT` auf die Hardware abstimmen (siehe [Worker-Konfiguration](#worker-konfiguration)), dann ausführen. Danach mit `check_installation_26.04.sh` prüfen, allenfalls mit `--fix` nachkorrigieren.
 
 Weiter muss nach der Installation "certbot --nginx -d <URL>" ausgeführt werden. Damit werden in der NGIX-Umgebung die Zertifikate generiert und installiert.
 
@@ -15,13 +15,16 @@ start putty.exe -load "<usernam>@<ip adresse des server>" <username>@<ip adresse
 
 Bei localhost (localhost:3386) muss man einen anderen Port verwenden, damit man nicht in Konflikt mit dem lokalen RDP-Server kommt! 
 
-Vollautomatische Installation und Diagnose eines **Lizmap Web Client + py-qgis-server**-Stacks auf **Ubuntu 24.04 LTS**.
+Vollautomatische Installation und Diagnose eines **Lizmap Web Client + py-qgis-server**-Stacks auf **Ubuntu 26.04 LTS** (u. a. arm64/Apple-Silicon-VMs).
 
-## Ubuntu 26.04-Variante (`ubuntu-26.04/`)
+## Ubuntu 24.04 Version (`ubuntu-24.04/`)
 
-[#ubuntu-2604-variante-ubuntu-2604](#ubuntu-2604-variante-ubuntu-2604)
+Für **Ubuntu 24.04 LTS** liegt im Unterverzeichnis [`ubuntu-24.04/`](ubuntu-24.04/) die ursprüngliche,
+weiterhin unterstützte Skript-Variante — siehe [`ubuntu-24.04/README.md`](ubuntu-24.04/README.md).
+Neue Features (z.B. der convmv-Timer gegen Umlaut-Probleme) werden in beiden Varianten gepflegt,
+der Fokus der aktiven Weiterentwicklung liegt aber auf der hier beschriebenen 26.04-Version.
 
-Für **Ubuntu 26.04 LTS** (u. a. arm64/Apple-Silicon-VMs) liegt im Unterverzeichnis [`ubuntu-26.04/`](ubuntu-26.04/) eine angepasste Skript-Variante:
+## Skripte (`ubuntu-26.04/`)
 
 | Skript | Zweck |
 |---|---|
@@ -34,89 +37,70 @@ Für **Ubuntu 26.04 LTS** (u. a. arm64/Apple-Silicon-VMs) liegt im Unterverzeich
 | `backup_lizmap_system_26.04.sh` | Backup aller Konfigurationen und Daten |
 | `GNOME_RD_Troubleshooting_Dokumentation.docx` | Fehlersuche-Historie: VMware-Fusion-Crash-Diagnose, der (mittlerweile wieder verworfene) Umstieg auf GNOME Remote Desktop und die Gründe für die Rückkehr zu xRDP — siehe Update-Kapitel am Ende des Dokuments |
 
-**Wichtigster Unterschied zu den Root-Skripten:** keiner mehr — die 26.04-Variante nutzt wie die
-Root-Skripte **xRDP + XFCE4** für den Remote-Zugriff (`RDP_USER`/`RDP_PASS`/`RDP_PORT`, gleiche
-Variablennamen wie unten unter "Konfiguration").
+Andere Hardware → [Worker Rechner](worker_rechner.html) öffnen, Werte berechnen lassen, dann `QGIS_WORKER_COUNT` im Skript-Header anpassen.
 
-Ein zwischenzeitlicher Versuch, stattdessen **GNOME Remote Desktop** (`gnome-remote-desktop` /
-`grdctl`) zu verwenden — um kein zusätzliches Desktop-Environment installieren zu müssen, da Ubuntu
-26.04 Desktop-Installationen bereits GNOME mitbringen — wurde wieder verworfen:
+> **Hinweis:** Sektion 10 (xRDP + XFCE4) lädt viele Pakete — Dauer je nach Verbindung 5–15 Minuten. Der Fortschritt wird angezeigt.
+
+### Warum xRDP statt GNOME Remote Desktop?
+
+Ein zwischenzeitlicher Versuch, **GNOME Remote Desktop** (`gnome-remote-desktop` / `grdctl`) zu
+verwenden — um kein zusätzliches Desktop-Environment installieren zu müssen, da Ubuntu 26.04
+Desktop-Installationen bereits GNOME mitbringen — wurde wieder verworfen:
 
 - Ubuntu 26.04 hat die **"GNOME on Xorg"-Session entfernt**, GNOME läuft nur noch unter Wayland.
 - GNOME Remote Desktop im `--system`-Modus (headless, ohne vorherigen physischen Login) liefert
   ohne **tatsächlich angeschlossenen Monitor kein Bild** (schwarzer Bildschirm) — für einen
   Server ohne Monitor damit unbrauchbar.
+- Zusätzlich verwendete es eine **Zwei-Stufen-Anmeldung** (ein reines `grdctl`-"Türsteher"-
+  Credential-Paar für die erste RDP-Verbindung, danach ein echter Linux-Login für die
+  eigentliche Session) und war anfällig für einen bekannten FreeRDP-NTLM-MIC-Bug.
 
 xRDP baut pro Verbindung eine eigene virtuelle X11-Session auf (`xorgxrdp`) und ist dadurch
 unabhängig vom lokalen Display/Monitor und vom lokalen Wayland/GNOME-Login — funktioniert headless
-zuverlässig, und ist zusätzlich leichter als eine volle GNOME-Session. Details, Hintergründe und
-alle aufgetretenen Stolpersteine (u. a. die verworfene GNOME-RD-Zwei-Stufen-Anmeldung, der bekannte
-FreeRDP-NTLM-MIC-Bug, und die xRDP-eigene Falle mit fehlender `~/.xsession`) stehen in
+zuverlässig, ist einstufig (ein normaler Linux-Login), und ist zusätzlich leichter als eine volle
+GNOME-Session. Details, Hintergründe und alle aufgetretenen Stolpersteine (u. a. die verworfene
+GNOME-RD-Zwei-Stufen-Anmeldung, der FreeRDP-NTLM-MIC-Bug, und die xRDP-eigene Falle mit fehlender
+`~/.xsession`) stehen in
 [`ubuntu-26.04/GNOME_RD_Troubleshooting_Dokumentation.docx`](ubuntu-26.04/GNOME_RD_Troubleshooting_Dokumentation.docx).
-
-Relevante Variablen im Skript-Header (identisch zur 24.04-Variante):
-
-```bash
-INSTALL_XRDP=true             # xRDP + XFCE4 für Remote-Zugriff
-INSTALL_QGIS_DESKTOP=true     # QGIS-Desktop-GUI-Paket (qgis + qgis-plugin-grass)
-RDP_USER="gisadmin"
-RDP_PASS="..."                # auto-generiert
-RDP_PORT=3389                 # bei xRDP per Config änderbar (/etc/xrdp/xrdp.ini)
-```
-
-> **Weitere RDP-Benutzer:** wie bei den Root-Skripten reicht ein einfaches `adduser` nicht — jeder
-> zusätzliche Linux-User braucht eine eigene, ausführbare `~/.xsession` mit `xfce4-session`, sonst
-> bricht die RDP-Sitzung sofort wieder ab. Siehe [CLAUDE.md](CLAUDE.md#xrdp-weitere-benutzer-anlegen).
-
-## Skripte
-
-
-| Skript | Zweck |
-|---|---|
-| `install_lizmap_qgisserver.sh` | Vollinstallation — `QGIS_WORKER_COUNT` im Header anpassen |
-| `install_lizmap_qgisserver_8cpu.sh` | Vollinstallation — voreingestellt für 8 CPU-Kerne (4 Worker) |
-| `install_lizmap_qgisserver_16cpu.sh` | Vollinstallation — voreingestellt für 16 CPU-Kerne (8 Worker) |
-| `check_installation.sh` | Diagnose + optionale Fehlerkorrektur (`--fix`) |
-| `backup_lizmap_system.sh` | Backup aller Konfigurationen und Daten als `.tar.gz` nach `/root/` |
-
-Andere Hardware → [Worker Rechner](worker_rechner.html) öffnen, Werte berechnen lassen, dann `QGIS_WORKER_COUNT` im Skript-Header anpassen.
-
-> **Hinweis:** Sektion 10 (xRDP + XFCE4) lädt viele Pakete — Dauer je nach Verbindung 5–15 Minuten. Der Fortschritt wird angezeigt.
 
 ## Was wird installiert
 
 | Komponente | Details |
 |---|---|
 | QGIS Server LTR | via offiziellem QGIS apt-Repository |
-| QGIS Desktop LTR | für Projektbearbeitung via RDP |
+| QGIS Desktop LTR | optional (`INSTALL_QGIS_DESKTOP`), für Projektbearbeitung via RDP |
 | py-qgis-server | 3liz Python WSGI-Wrapper für QGIS Server |
 | Lizmap Web Client | 3.9.x |
-| Nginx + PHP 8.3-FPM | Webserver |
+| Nginx + PHP 8.5-FPM | Webserver |
 | PostgreSQL + PostGIS | optional |
-| pgAdmin4 Web | optional, unter `/pgadmin4` |
+| pgAdmin4 Desktop | optional, nutzbar über die xrdp/XFCE-Session (auf arm64 nicht verfügbar) |
 | xRDP + XFCE4 | Remote Desktop auf Port 3389, optional |
 | Xvfb | virtuelles Display `:99` für QGIS/Qt-Rendering |
 | certbot + python3-certbot-nginx | HTTPS via Let's Encrypt |
-| UFW + Fail2ban | Firewall + Brute-Force-Schutz, optional |
+| UFW + Fail2ban | Firewall + Brute-Force-Schutz, optional (siehe [UFW-Anhang](#anhang-ufw-firewall-verwalten)) |
 
 **QGIS Server Plugins** (via qgis-plugin-manager): `lizmap_server`, `atlasprint`, `wfsOutputExtension`
+
+> **ARM/Apple Silicon:** Getestet via VMware Fusion auf Apple M4. QGIS Desktop LTR und pgAdmin4
+> Desktop stehen auf arm64 nicht zur Verfügung (Hersteller-Repos bauen nur amd64) — QGIS Server
+> selbst, PHP, PostgreSQL, Nginx und py-qgis-server laufen auf arm64 nativ.
 
 ## Schnellstart
 
 ```bash
-# Als root auf Ubuntu 24.04 LTS:
+# Als root auf Ubuntu 26.04 LTS:
 git clone https://github.com/tgdbepe4/py-qgisserver-installation-with-bash-shell-script
-cd py-qgisserver-installation-with-bash-shell-script
+cd py-qgisserver-installation-with-bash-shell-script/ubuntu-26.04
 
 # Variablen im Skript-Header anpassen (SERVER_NAME, QGIS_WORKER_COUNT, …):
 # CERTBOT_EMAIL NICHT hier eintragen — siehe Abschnitt "Konfiguration" unten (Umgebungsvariable).
-nano install_lizmap_qgisserver_8cpu.sh    # für 8 CPU-Kerne
+nano install_lizmap_qgisserver_8cpu_26.04.sh    # für 8 CPU-Kerne
 # oder
-nano install_lizmap_qgisserver_16cpu.sh   # für 16 CPU-Kerne
+nano install_lizmap_qgisserver_16cpu_26.04.sh   # für 16 CPU-Kerne
 # oder
-nano install_lizmap_qgisserver.sh         # Basis-Skript, QGIS_WORKER_COUNT manuell setzen
+nano install_lizmap_qgisserver_26.04.sh         # Basis-Skript, QGIS_WORKER_COUNT manuell setzen
 
-sudo bash install_lizmap_qgisserver_8cpu.sh
+sudo bash install_lizmap_qgisserver_8cpu_26.04.sh
 ```
 
 ## Konfiguration
@@ -125,9 +109,10 @@ Die wichtigsten Variablen befinden sich im Skript-Header:
 
 ```bash
 SERVER_NAME="localhost karte1.example.com"  # Domain / IP des Servers
-QGIS_WORKER_COUNT=4                          # Worker-Prozesse (≈ CPU-Kerne ÷ 2)
+QGIS_WORKER_COUNT=6                          # Worker-Prozesse (≈ CPU-Kerne ÷ 2)
 INSTALL_POSTGRESQL=true                      # PostgreSQL + PostGIS
-INSTALL_XRDP=true                            # Remote Desktop
+INSTALL_XRDP=true                            # Remote Desktop (xrdp + XFCE4)
+INSTALL_QGIS_DESKTOP=true                    # QGIS-Desktop-GUI-Paket (qgis + qgis-plugin-grass)
 INSTALL_SECURITY=true                        # UFW + Fail2ban
 CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"           # E-Mail → HTTPS automatisch aktivieren
 ```
@@ -138,7 +123,7 @@ CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"           # E-Mail → HTTPS automatisch akti
 
 ```bash
 export CERTBOT_EMAIL=du@example.com
-sudo -E bash install_lizmap_qgisserver_8cpu.sh
+sudo -E bash install_lizmap_qgisserver_8cpu_26.04.sh
 ```
 
 Vorausgesetzt DNS für die Domain aus `SERVER_NAME` zeigt bereits auf den Server, läuft certbot dann vollautomatisch am Ende der Installation.
@@ -163,8 +148,8 @@ nicht. Zusätzlich `~/.xsession` mit `xfce4-session` anlegen, siehe [CLAUDE.md](
 ## Diagnose
 
 ```bash
-sudo bash check_installation.sh          # Vollständige Prüfung
-sudo bash check_installation.sh --fix    # Prüfung + automatische Korrekturen
+sudo bash check_installation_26.04.sh          # Vollständige Prüfung
+sudo bash check_installation_26.04.sh --fix    # Prüfung + automatische Korrekturen
 ```
 
 Was geprüft wird: Systemdienste, py-qgisserver Status, `server.conf`, Nginx-Konfiguration, Lizmap API, PHP-Extensions, QGIS-Plugins, Verzeichnisse & Berechtigungen, PostgreSQL + PostGIS, Xvfb-Display.
@@ -173,13 +158,13 @@ Was geprüft wird: Systemdienste, py-qgisserver Status, `server.conf`, Nginx-Kon
 > Bei komplexeren Problemen (fehlende Pakete, defekte venv, etc.) ist das erneute Ausführen
 > des Installationsskripts zuverlässiger — es ist **idempotent** und kann sicher wiederholt werden:
 > ```bash
-> sudo bash install_lizmap_qgisserver.sh
+> sudo bash install_lizmap_qgisserver_26.04.sh
 > ```
 
 ## Backup
 
 ```bash
-sudo bash backup_lizmap_system.sh
+sudo bash backup_lizmap_system_26.04.sh
 ```
 
 Erstellt `/root/lizmap_backup_DATUM.tar.gz` mit:
@@ -191,7 +176,7 @@ Erstellt `/root/lizmap_backup_DATUM.tar.gz` mit:
 | Lizmap Konfiguration | `/var/www/lizmap/lizmap/var/config/` |
 | Nginx Konfiguration | `/etc/nginx/sites-*`, `nginx.conf`, `lizmap-common.conf`, `ssl/` |
 | Supervisor Konfiguration | `/etc/supervisor/conf.d/` |
-| PHP Konfiguration | `/etc/php/8.3/fpm/` |
+| PHP Konfiguration | `/etc/php/8.5/fpm/` |
 | PostgreSQL Dump | `pg_dump lizmap` + Globals |
 | Systemd Units | `xvfb.service`, `qgis.service`, `qgis-server@*` |
 | xRDP Konfiguration | `/etc/xrdp/startwm.sh`, `xrdp.ini` |
@@ -213,9 +198,9 @@ Am Ende zeigt das Skript den korrekten `scp`-Befehl mit der aktuellen Server-IP 
 > `backup directory does not exists` ab, ohne etwas zu sichern. Vorher `mkdir -p` nicht vergessen.
 
 ```bash
-# Aus dem Repo-Verzeichnis ausführen (dort liegt backup_lizmap_system.sh),
-# z.B. ~/py-qgisserver-installation-with-bash-shell-script/ — nicht /var/www/lizmap!
-sudo bash backup_lizmap_system.sh
+# Aus dem ubuntu-26.04/-Verzeichnis ausführen (dort liegt backup_lizmap_system_26.04.sh) —
+# nicht /var/www/lizmap!
+sudo bash backup_lizmap_system_26.04.sh
 
 sudo mkdir -p /tmp/lizmap-backup
 cd /var/www/lizmap
@@ -294,8 +279,8 @@ supervisorctl restart py-qgisserver
 
 **5. Dienste neu laden und prüfen**
 ```bash
-systemctl reload php8.3-fpm nginx
-sudo bash check_installation.sh
+systemctl reload php8.5-fpm nginx
+sudo bash check_installation_26.04.sh
 ```
 > **Vorsicht mit `--fix`:** Auf Servern, die von der Standard-Architektur abweichen (z.B. kein
 > Supervisor, andere Nginx-Struktur, `root` statt `qgis`-Systembenutzer), listet das Diagnoseskript
@@ -307,11 +292,11 @@ Im Browser testen (Login, Karte laden, Serverinformationen-Seite `.../lizmap/adm
 prüft Lizmap-/QGIS-Server-/Plugin-Versionen auf einen Blick). Danach aufräumen:
 ```bash
 rm -rf /var/www/lizmap.bak
-rm /root/lizmap_backup_*.tar.gz   # das backup_lizmap_system.sh-Archiv aus Schritt 1
+rm /root/lizmap_backup_*.tar.gz   # das backup_lizmap_system_26.04.sh-Archiv aus Schritt 1
 ```
 
-Anschliessend `LIZMAP_VERSION` im Skript-Header von `install_lizmap_qgisserver.sh` (und den CPU-Varianten)
-auf die neue Version anpassen, damit künftige Neuinstallationen die aktualisierte Version verwenden.
+Anschliessend `LIZMAP_VERSION` im Skript-Header aller `_26.04.sh`-Varianten auf die neue Version
+anpassen, damit künftige Neuinstallationen die aktualisierte Version verwenden.
 
 Falls dabei auch QGIS Server auf eine neue Version gesprungen ist: `sources.list` für
 `qgis-plugin-manager` nachziehen (siehe nächster Abschnitt), sonst werden ggf. nicht die zur neuen
@@ -327,12 +312,11 @@ QGIS-Version passenden Plugin-Versionen gefunden.
 > neu schreiben.
 
 ```bash
-QGIS_VER=$(dpkg -l qgis-server | awk '/^ii.*qgis-server /{print $3}' | grep -oP '\d+\.\d+' | head -1)
+QGIS_VER=$(dpkg-query -W -f='${Version}\n' qgis-server | grep -oP '\d+\.\d+' | head -1)
 echo "https://plugins.qgis.org/plugins/plugins.xml?qgis=${QGIS_VER}" > /srv/qgis/plugins/sources.list
 
-/opt/local/py-qgis-server/bin/pip install -q qgis-plugin-manager
-/opt/local/py-qgis-server/bin/qgis-plugin-manager update
-/opt/local/py-qgis-server/bin/qgis-plugin-manager upgrade
+qgis-plugin-manager update
+qgis-plugin-manager upgrade
 
 supervisorctl restart py-qgisserver   # oder: sudo systemctl restart qgis.service (falls kein Supervisor läuft)
 ```
@@ -567,6 +551,428 @@ setzen, falls der Server Medien-Uploads über einen Mac-Zwischenschritt erhält 
 Langfristig/alternativ: Wo möglich den Mac-Umweg beim Sync vermeiden und stattdessen direkt
 zwischen den Ubuntu-Systemen syncen (z.B. `rsync -av -e ssh`) — dabei tritt das Problem gar
 nicht erst auf, da kein macOS-System beteiligt ist, das normalisieren könnte.
+
+## Anhang: UFW Firewall verwalten
+
+Installation, Grundregeln und ein sicherer Weg zur Aktivierung — ohne sich per SSH auszusperren.
+`INSTALL_SECURITY=true` richtet UFW bereits mit sinnvollen Grundregeln ein (SSH, HTTP/HTTPS, RDP-Port);
+dieser Anhang ist für alle, die die Firewall darüber hinaus manuell anpassen wollen (z.B. einen
+Datenbank-Port nur für eine bestimmte Client-IP öffnen).
+
+### Funktionsprinzip
+
+UFW (Uncomplicated Firewall) ist kein eigener Paketfilter, sondern eine vereinfachte Kommandozeile
+vor dem Linux-Kernel-Paketfilter (iptables/nftables). Statt Chains und Tables von Hand zu verwalten,
+schreibt man Regeln wie `allow 22/tcp` — UFW übersetzt das dahinter in die passenden Kernel-Regeln.
+
+Das Grundprinzip ist immer **Default Deny, explizit erlauben**: eingehender Verkehr wird
+standardmässig verworfen, und nur was durch eine passende ALLOW-Regel abgedeckt ist, kommt durch.
+
+Jedes eingehende Paket durchläuft die Regelliste der Reihe nach — die erste passende Regel
+entscheidet. Ohne Treffer greift die Default-Policy (DENY): das Paket wird verworfen, ohne Antwort
+oder Reset.
+
+### 1. Installation
+
+Auf aktuellen Ubuntu-Server-Images ist UFW meist schon vorinstalliert, aber (noch) nicht aktiv.
+Prüfen und ggf. nachinstallieren:
+
+```bash
+# Version / Vorhandensein prüfen
+sudo ufw version
+# falls nicht vorhanden
+sudo apt update
+sudo apt install ufw -y
+```
+
+### 2. Grundregeln festlegen
+
+Bevor irgendetwas erlaubt wird, die Default-Policies setzen — eingehend zu, ausgehend offen:
+
+```bash
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+```
+
+Diese Befehle ändern nur die Konfiguration, nicht den laufenden Zustand — UFW ist an dieser
+Stelle noch nicht aktiv (siehe [Aktivieren](#5-aktivieren)).
+
+### 3. Regeln setzen
+
+Regeln lassen sich nach Port, Protokoll, Quelle oder einer Kombination davon definieren. Ein
+Kommentar (`comment`) hilft, sich Monate später noch zu erinnern, wofür eine Regel gedacht war.
+
+**Nach Port/Protokoll — für alle:**
+```bash
+sudo ufw allow 22/tcp comment 'SSH'
+sudo ufw allow 80/tcp comment 'HTTP'
+sudo ufw allow 443/tcp comment 'HTTPS'
+```
+
+**Nach Quell-IP — nur für einen bestimmten Client:**
+```bash
+sudo ufw allow from 203.0.113.10 to any port 5432 proto tcp comment 'Postgres-Client Büro'
+```
+Diese Regel öffnet ausschliesslich `203.0.113.10` den Zugriff auf Port 5432 — alle anderen
+Quellen bleiben durch die Default-Policy blockiert.
+
+**Ganzes Subnetz statt Einzel-IP:**
+```bash
+sudo ufw allow from 203.0.113.0/24 to any port 5432 proto tcp
+```
+
+> **Tipp:** Bei dynamischer IP-Vergabe (z. B. Heimanschluss ohne feste IP) lieber grosszügiger
+> fassen (Subnetz statt Einzel-IP) oder den Dienst stattdessen nur per SSH-Tunnel erreichbar
+> machen — sonst muss die Regel bei jedem IP-Wechsel des Providers nachgezogen werden.
+
+So sieht ein typisches Regel-Set danach aus (Ausgabe von `ufw status verbose`):
+
+| Aktion | Port | Quelle | Kommentar |
+|---|---|---|---|
+| ALLOW | 22/tcp | von überall | SSH |
+| ALLOW | 80/tcp | von überall | HTTP |
+| ALLOW | 443/tcp | von überall | HTTPS |
+| ALLOW | 5432/tcp | nur von 203.0.113.10 | — |
+| DENY | alles andere | — | Default-Policy |
+
+Regeln vorbereiten, ohne sie sofort zu aktivieren:
+```bash
+sudo ufw show added
+```
+Zeigt alle bisher hinzugefügten Regeln, ohne dass UFW selbst schon läuft — praktisch, um die
+komplette Liste einmal gegenzuprüfen, bevor man aktiviert.
+
+### 4. IPv6
+
+UFW verwaltet IPv6 automatisch mit, solange `IPV6=yes` in `/etc/default/ufw` steht (Standard auf
+Ubuntu). Jede Portregel wird dann zusätzlich als `(v6)`-Variante angelegt — sichtbar in
+`ufw status verbose`. Eine IP-spezifische Regel wie `allow from 203.0.113.10` gilt dagegen nur
+für die genannte Adressfamilie.
+
+### 5. Aktivieren
+
+> **Achtung:** Auf einem Remote-Server ist das der Schritt, bei dem man sich versehentlich
+> aussperren kann — wenn die SSH-Regel fehlt oder falsch ist, ist die Verbindung sofort weg und
+> es gibt keine zweite Chance über dieselbe Session.
+
+```bash
+sudo ufw enable
+sudo ufw status verbose
+```
+
+Direkt danach, **ohne die aktuelle Session zu schliessen**: in einem zweiten, separaten Terminal
+eine neue SSH-Verbindung aufbauen. Klappt sie, ist bestätigt, dass die Regeln passen. Klappt sie
+nicht, bleibt die erste Session offen — dort sofort `sudo ufw disable` zum Zurückrollen, dann die
+Regeln korrigieren.
+
+Bei einem Server ohne Netzwerkzugriff als Rückfallebene (z. B. Serial-/Rescue-Console des
+Hosting-Anbieters) lohnt es sich, vorher kurz zu prüfen, dass dieser Zugang funktioniert — als
+zusätzliches Sicherheitsnetz, falls doch beide SSH-Wege blockiert sind.
+
+### 6. Verwaltung im laufenden Betrieb
+
+```bash
+# Regeln mit Nummern anzeigen (für gezieltes Löschen)
+sudo ufw status numbered
+# Regel Nr. 3 löschen
+sudo ufw delete 3
+# Regel per Definition statt Nummer löschen
+sudo ufw delete allow 8080/tcp
+# UFW deaktivieren (Regeln bleiben gespeichert)
+sudo ufw disable
+# komplett zurücksetzen (alle Regeln löschen)
+sudo ufw reset
+```
+
+Einmal aktiviert, überstehen die Regeln auch einen Neustart — UFW baut sie beim Boot über einen
+eigenen systemd-Dienst automatisch wieder auf.
+
+### 7. Ergänzung: fail2ban gegen Brute-Force
+
+UFW entscheidet nur ob ein Port erreichbar ist — nicht, wie oft jemand von derselben IP
+erfolglos versucht, sich anzumelden. Dafür ergänzt fail2ban die Firewall sinnvoll: es liest
+Log-Dateien (z. B. `sshd`) und sperrt IPs nach zu vielen Fehlversuchen automatisch — indem es
+selbst eine passende UFW/iptables-Regel einfügt.
+
+```bash
+sudo apt install fail2ban -y
+```
+
+`/etc/fail2ban/jail.local`:
+```ini
+[sshd]
+enabled = true
+maxretry = 5
+findtime = 10m
+bantime = 1h
+```
+
+```bash
+sudo systemctl enable --now fail2ban
+sudo fail2ban-client status sshd
+```
+
+### Cheat-Sheet
+
+Die Befehle, die im Alltag am häufigsten gebraucht werden.
+
+| Zweck | Befehl |
+|---|---|
+| Status ansehen | `sudo ufw status verbose` |
+| Status mit Regelnummern | `sudo ufw status numbered` |
+| Port für alle öffnen | `sudo ufw allow 443/tcp` |
+| Port nur für eine IP öffnen | `sudo ufw allow from <ip> to any port <port> proto tcp` |
+| Regel entfernen | `sudo ufw delete <nummer>` |
+| Aktivieren | `sudo ufw enable` |
+| Deaktivieren (Notausstieg) | `sudo ufw disable` |
+| Vorbereitete Regeln ansehen | `sudo ufw show added` |
+| Alles zurücksetzen | `sudo ufw reset` |
+
+### Häufige Fallstricke
+
+- **SSH-Regel vor dem Aktivieren vergessen.** `ufw enable`, bevor Port 22 erlaubt ist, kappt die
+  eigene Verbindung sofort.
+- **Zwei Firewalls gleichzeitig aktiv.** Läuft parallel noch eine andere Lösung (z. B. CSF), die
+  ebenfalls iptables direkt verwaltet, können sich beide Regelsätze überschreiben oder
+  gegenseitig aushebeln. Die alte Lösung sauber deaktivieren, bevor UFW dauerhaft übernimmt.
+- **Regeln, die „offen für alle" statt „offen für bekannte Quellen" sind.** Besonders bei
+  Datenbank-, RDP- oder SMB-Ports lohnt sich fast immer die Einschränkung auf bestimmte IPs statt
+  eines pauschalen `allow <port>`.
+- **Reihenfolge bei sich widersprechenden Regeln.** UFW wertet in der Reihenfolge aus, in der
+  Regeln existieren — eine weiter gefasste Regel kann eine speziellere, später hinzugefügte,
+  wirkungslos machen. Im Zweifel mit `ufw status numbered` die tatsächliche Reihenfolge prüfen.
+
+## Anhang: Ubuntu-Server 1:1 klonen mit Clonezilla
+
+Anleitung: physischen Ubuntu-Server (z. B. HP ProDesk 600 G3 DM, GIS-/Lizmap-Server) auf einen
+zweiten, baugleichen PC mit grösserer Festplatte klonen. Stand: 7. September 2026.
+
+### 1. Zweck und Voraussetzungen
+
+Diese Anleitung beschreibt, wie ein bestehender Ubuntu-Server 1:1 auf einen zweiten PC geklont
+wird — inklusive Betriebssystem, allen Konfigurationen, xrdp/XFCE-Desktop, PostgreSQL-Datenbank
+usw. Der Ziel-PC braucht dafür kein vorinstalliertes Betriebssystem.
+
+**Voraussetzungen:**
+- Ein leerer USB-Stick (mind. 1 GB) für den Clonezilla-Live-Boot-Stick.
+- Quell- und Ziel-PC im selben LAN (für den Netzwerk-Klon in Kapitel 5).
+- Physischer Zugriff auf beide PCs, um vom Stick zu booten (Tastatur/Bildschirm oder Fernzugriff
+  über eine Management-Konsole).
+- Zielplatte gleich gross oder grösser als die Quellplatte. Ist sie grösser, wird der
+  zusätzliche Platz erst nach dem Klonen nutzbar gemacht (Kapitel 6).
+
+### 2. Clonezilla-Live-USB-Stick erstellen
+
+**2.1 ISO herunterladen**
+
+Von clonezilla.org die Version „Clonezilla live (Stable)" herunterladen, Plattform amd64,
+Dateityp iso.
+
+**2.2 Stick schreiben unter macOS**
+
+Grafisch mit balenaEtcher (kostenlos, etcher.balena.io): App öffnen, das ISO auswählen, den
+USB-Stick als Ziel wählen, „Flash!" klicken.
+
+Alternativ im Terminal:
+```bash
+diskutil list                                    # richtigen Stick identifizieren
+diskutil unmountDisk /dev/diskN
+sudo dd if=clonezilla-live-*-amd64.iso of=/dev/rdiskN bs=4m status=progress
+diskutil eject /dev/diskN
+```
+> Unbedingt `/dev/rdiskN` (mit „r" für raw) verwenden und die Disk-Nummer vorher mit
+> `diskutil list` prüfen — der Befehl löscht den kompletten Inhalt des gewählten Sticks.
+
+**2.3 Stick schreiben unter Windows**
+
+Mit Rufus (kostenlos, rufus.ie): Gerät = USB-Stick, Startart = Auswahl → heruntergeladenes ISO
+angeben → Start.
+
+Fragt Rufus nach ISO-Image-Modus oder DD-Image-Modus: zuerst ISO-Image-Modus probieren
+(Standard). Bootet der Stick damit nicht, den Stick mit DD-Image-Modus neu schreiben.
+
+### 3. PC vom Stick booten
+
+- USB-Stick einstecken, PC einschalten.
+- Boot-Menü aufrufen (bei HP-Geräten meist F9, manchmal Esc oder F10).
+- Den USB-Stick als Boot-Gerät wählen.
+
+Das Live-System startet unabhängig davon, was auf der internen Platte liegt — bei einem leeren
+Ziel-PC ist das kein Problem.
+
+> Boot-Modus (UEFI vs. Legacy/CSM) sollte auf beiden PCs gleich eingestellt sein, sonst findet
+> der Ziel-PC den geklonten Bootloader später eventuell nicht. Bei zwei ähnlichen
+> HP-ProDesk-Geräten ist das im Werkszustand praktisch immer beidseitig UEFI.
+
+### 4. Klon-Methoden im Überblick
+
+Drei grundsätzliche Wege, die beiden Platten zu verbinden:
+
+1. **Über ein Zwischen-Image:** erst am Quell-PC sichern („device-image") auf eine externe
+   Platte oder einen Netzwerk-Share, dann am Ziel-PC zurückspielen („image-device"). Mehr
+   Schritte, dafür liegt danach auch gleich ein Backup vor.
+2. **Beide Platten an einem PC:** Zielplatte zusätzlich einbauen oder per USB-SATA-Adapter
+   anschliessen, dann „device-device" direkt in einem Rutsch, ohne Zwischenspeicher.
+3. **Beide PCs gleichzeitig übers Netzwerk:** direkter Klon zwischen den beiden laufenden
+   Live-Systemen, kein Kabel/Adapter nötig. Siehe Kapitel 5 — dieser Weg wird hier im Detail
+   beschrieben.
+
+### 5. Direkter Netzwerk-Klon (PC-zu-PC, ohne Zwischenspeicher)
+
+Clonezillas geführte Oberfläche bietet keinen sauberen Menüpunkt für einen reinen
+Netzwerk-Klon ohne Zwischen-Image. Die Netzwerkfunktionen (SSH-/Samba-/NFS-Ziel, „Lite Server")
+laufen immer über ein Image. Ein echter direkter Klon zwischen zwei Maschinen läuft daher über
+die Shell, die im Live-System bereits mit `dd`, `ssh` und Netzwerk-Tools bereitsteht.
+
+**5.1 In die Shell wechseln**
+
+Im Clonezilla-Startmenü nicht „Start_Clonezilla" wählen, sondern „Enter_shell". Das auf beiden
+PCs durchführen.
+
+**5.2 Netzwerk auf dem Ziel-PC einrichten**
+
+Interface-Namen und Status prüfen:
+```bash
+ip link
+```
+Zeigt `state DOWN` oder `NO-CARRIER` → Kabel/Switch-Port prüfen, dann Interface aktivieren
+(Namen aus obigem Befehl einsetzen):
+```bash
+sudo ip link set <interface> up
+```
+Per DHCP eine Adresse anfordern:
+```bash
+sudo dhclient -v <interface>
+ip a
+```
+Kommt auch über `dhclient` keine Adresse (z. B. weil DHCP auf diesem Port/VLAN eingeschränkt
+ist), die IP manuell passend zum Ziel-LAN setzen:
+```bash
+sudo ip addr add <FREIE-IP>/24 dev <interface>
+sudo ip route add default via <GATEWAY-IP>
+```
+
+**5.3 SSH-Zugriff auf dem Ziel-PC vorbereiten**
+```bash
+sudo passwd              # Root-Passwort setzen, für SSH-Login nötig
+sudo service ssh start   # falls SSH-Dienst noch nicht läuft
+ip a                     # IP-Adresse notieren
+```
+
+**5.4 Platten identifizieren**
+
+Auf beiden PCs die Disk-Bezeichnung prüfen — nicht blind übernehmen, da sie je nach Controller
+variiert (z. B. `/dev/sda` vs. `/dev/nvme0n1`):
+```bash
+lsblk
+```
+
+**5.5 Klonen: direkter Disk-zu-Disk-Klon über SSH**
+
+Auf dem Quell-PC ausführen (Platzhalter durch die tatsächlichen Werte aus 5.3/5.4 ersetzen):
+```bash
+sudo dd if=<QUELL-DISK> bs=4M status=progress \
+  | ssh root@<ZIEL-IP> "dd of=<ZIEL-DISK> bs=4M"
+```
+Beispiel mit konkreten Werten:
+```bash
+sudo dd if=/dev/sda bs=4M status=progress \
+  | ssh root@192.168.1.150 "dd of=/dev/sda bs=4M"
+```
+> Quelle und Ziel nicht verwechseln — der Befehl überschreibt die Zielplatte vollständig und
+> ohne Rückfrage. `<QUELL-DISK>` ist immer die Platte des bestehenden Servers, `<ZIEL-DISK>`
+> immer die leere Platte des neuen PCs.
+
+Dauer je nach Netzwerktempo und Plattengrösse: bei Gigabit-LAN und einer SSD im hohen
+zweistelligen GB-Bereich meist 20–60 Minuten.
+
+**5.6 Alternative: Als komprimierte Image-Datei sichern (statt Direkt-Klon)**
+
+Soll statt eines direkten Klons zunächst nur ein Abbild der Platte auf einen dritten Rechner
+(z. B. das NAS) gesichert werden, lässt sich derselbe Mechanismus generalisiert auch dafür
+nutzen — Quelle bleibt der Server, Ziel ist diesmal ein beliebiger Rechner mit genug
+Speicherplatz und laufendem SSH-Server:
+```bash
+ssh root@<QUELL-IP> "dd if=<QUELL-DISK> bs=4M status=progress | gzip -1" \
+  > <ZIEL-DATEINAME>_$(date +%Y%m%d).img.gz
+```
+Dieser Befehl läuft auf dem Rechner, der die Datei empfangen und speichern soll (z. B. dem Mac
+oder der DS1517+), und zieht die Daten aktiv vom Server (`<QUELL-IP>`). `<ZIEL-DATEINAME>` frei
+wählbar, z. B. der Hostname des Quell-Servers.
+
+Rückspielen später auf eine (leere) Zielplatte:
+```bash
+gunzip -c <ZIEL-DATEINAME>_<DATUM>.img.gz \
+  | ssh root@<ZIEL-IP> "dd of=<ZIEL-DISK> bs=4M"
+```
+
+### 6. Nach dem Klonen: Ziel-PC anpassen
+
+Der Ziel-PC hat nun eine exakte Kopie des Quell-Systems — inklusive IP-Adresse, Hostname und
+SSH-Identität. Damit beide Maschinen gleichzeitig im selben Netz laufen können, vor dem ersten
+Produktivbetrieb anpassen:
+
+**6.1 IP-Adresse ändern**
+
+Netzwerk-Konfiguration prüfen und dem Klon eine neue, noch nicht vergebene feste IP zuweisen:
+```bash
+ip a
+cat /etc/netplan/*.yaml
+```
+
+**6.2 Hostname ändern**
+```bash
+sudo hostnamectl set-hostname <neuer-name>
+```
+
+**6.3 SSH-Host-Keys neu erzeugen**
+
+Der Klon hat identische SSH-Host-Keys wie das Original — das führt bei jedem, der beide Rechner
+per SSH anspricht, zur Warnung „REMOTE HOST IDENTIFICATION HAS CHANGED":
+```bash
+sudo rm /etc/ssh/ssh_host_*
+sudo ssh-keygen -A
+```
+
+**6.4 machine-id neu setzen**
+
+Vermeidet u. a. Verwechslungen bei DHCP-Leases und in systemd-Journalen:
+```bash
+sudo rm /etc/machine-id
+sudo systemd-machine-id-setup
+```
+
+**6.5 Partition und Dateisystem vergrössern (bei grösserer Zielplatte)**
+
+Da `dd` nur die Partitionstabelle der Quellplatte 1:1 kopiert, bleibt zusätzlicher Speicherplatz
+auf einer grösseren Zielplatte zunächst ungenutzt. Partitionsnummer vorher mit `lsblk` bzw.
+`sudo fdisk -l` prüfen (bei GPT/UEFI meist Nummer 2 oder 3, nach EFI-Partition und ggf. Swap):
+```bash
+sudo growpart /dev/sda 2          # Root-Partition auf neuen Platz erweitern
+sudo resize2fs /dev/sda2          # ext4-Dateisystem entsprechend mitwachsen lassen
+```
+
+### 7. Kurzreferenz
+
+Alle Kernbefehle des direkten Netzwerk-Klons auf einen Blick:
+```bash
+# Auf dem Ziel-PC (Enter_shell):
+sudo passwd
+sudo service ssh start
+ip a                                             # IP-Adresse notieren
+lsblk                                            # Zieldisk notieren
+
+# Auf dem Quell-PC (Enter_shell):
+lsblk                                            # Quelldisk notieren
+sudo dd if=<QUELL-DISK> bs=4M status=progress \
+  | ssh root@<ZIEL-IP> "dd of=<ZIEL-DISK> bs=4M"
+
+# Danach auf dem Ziel-PC:
+sudo growpart /dev/sda 2 && sudo resize2fs /dev/sda2
+sudo hostnamectl set-hostname <neuer-name>
+sudo rm /etc/ssh/ssh_host_* && sudo ssh-keygen -A
+sudo rm /etc/machine-id && sudo systemd-machine-id-setup
+```
 
 ## Referenzen
 
