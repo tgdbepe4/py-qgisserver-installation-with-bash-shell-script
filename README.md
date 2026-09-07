@@ -447,6 +447,126 @@ QGIS Server ist CPU-intensiv. Zu schwache Hardware führt zu langen Ladezeiten u
 
 > **Tipp:** Passmark-Werte für eigene Hardware: [cpubenchmark.net](https://www.cpubenchmark.net/)
 
+### Bilder mit Umlauten im Dateinamen werden von Lizmap/QGIS Server nicht gefunden (404)
+
+**Symptom:** Nach dem Synchronisieren von Medien-/Upload-Verzeichnissen zwischen zwei
+Ubuntu-Systemen über einen Mac als Zwischenstation (z.B. via ForkLift: Ubuntu → Mac → Ubuntu)
+liefert der Lizmap `getMedia`-Endpunkt für Dateien, deren Name Umlaute oder andere
+Sonderzeichen enthält (z.B. `Hauptstrasse 26 Bözen 1923 Haus mit Treppe 2.jpg`), einen 404,
+obwohl die Datei nachweislich am erwarteten Pfad liegt und die Dateiberechtigungen korrekt
+sind. Dateien ohne Sonderzeichen im Namen sind vom Problem nicht betroffen.
+
+**Ursache:** macOS normalisiert Dateinamen mit Sonderzeichen beim Anlegen/Kopieren über
+Finder-/Cocoa-Dateisystem-APIs standardmässig nach Unicode **NFD** (zerlegte Form: `o` +
+separates Kombinationszeichen für den Trema, statt einem einzelnen `ö`-Zeichen). Das betrifft
+praktisch jede App auf dem Mac, die Dateien schreibt oder umbenennt — auch ForkLift. Eine
+spezifische Einstellung in ForkLift, um das zu unterbinden, existiert nach aktuellem
+Kenntnisstand nicht.
+
+Linux/PHP (und damit Lizmaps `getMedia`-Route) erwartet dagegen **NFC** (vorkomponierte
+Form). Der Dateiname, der aus der URL dekodiert wird, ist byte-technisch nicht identisch mit
+dem NFD-Dateinamen auf der Platte — die Datei wird trotz identischer optischer Darstellung
+nicht gefunden. Sobald eine Datei mit Sonderzeichen im Namen also den Umweg über den Mac
+nimmt, kann sie im NFD-Format auf dem Ziel-Ubuntu-System landen und ist dort für Lizmap
+unsichtbar.
+
+**Diagnose:** Im betroffenen Verzeichnis (z.B. `.../media/upload/<projekt>/<layer>/`)
+prüfen, welche Dateien NFD statt NFC sind:
+
+```bash
+cd /pfad/zum/media/upload/verzeichnis/
+python3 -c "
+import unicodedata, os
+for f in os.listdir('.'):
+    print(f, '-> NFC' if unicodedata.is_normalized('NFC', f) else '-> NFD/andere Form')
+"
+```
+
+Alle Zeilen mit `NFD/andere Form` sind potenziell betroffen (nur relevant bei Dateinamen mit
+Sonderzeichen). Zusätzlich prüfenswert (in dieser Reihenfolge, um andere Ursachen
+auszuschliessen): Dateiberechtigungen entlang des ganzen Pfads (`namei -l /pfad/zur/datei`),
+sowie ob der Browser evtl. nur einen veralteten Cache anzeigt (Test per
+`curl -o /dev/null -w "%{http_code}\n" "<getMedia-URL>"`, umgeht den Browser-Cache).
+
+**Fix (einmalig, für bereits betroffene Dateien):**
+
+```bash
+sudo apt install -y convmv
+convmv -f utf8 -t utf8 --nfc -r --notest /srv/data/
+```
+
+(`/srv/data/` durch das jeweilige Basisverzeichnis der Repositories ersetzen; `-r` =
+rekursiv, `--notest` = tatsächlich ausführen statt nur Vorschau)
+
+**Prävention (dauerhaft, systemd-Timer):** Automatisiert alle 15 Minuten die Normalisierung
+neu ankommender Dateien, unabhängig vom Übertragungsweg (ForkLift, Lizmap-Upload,
+QFieldCloud, etc.).
+
+Skript `/usr/local/bin/convmv-nfc-watch.sh`:
+```bash
+#!/bin/bash
+set -euo pipefail
+
+# Verzeichnisse, die regelmässig auf NFC normalisiert werden sollen
+TARGETS=(
+    "/srv/data"
+)
+
+for dir in "${TARGETS[@]}"; do
+    if [ -d "$dir" ]; then
+        echo "Normalisiere Dateinamen (NFD->NFC) unter $dir ..."
+        convmv -f utf8 -t utf8 --nfc -r --notest "$dir"
+    else
+        echo "WARNUNG: $dir existiert nicht, übersprungen."
+    fi
+done
+```
+
+Service-Unit `/etc/systemd/system/convmv-nfc.service`:
+```ini
+[Unit]
+Description=Normalisiert Dateinamen (NFD->NFC) unter /srv/data
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/convmv-nfc-watch.sh
+```
+
+Timer-Unit `/etc/systemd/system/convmv-nfc.timer`:
+```ini
+[Unit]
+Description=Regelmässige NFD->NFC-Normalisierung für /srv/data
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+Installation:
+```bash
+sudo chmod +x /usr/local/bin/convmv-nfc-watch.sh
+sudo systemctl daemon-reload
+sudo systemctl enable --now convmv-nfc.timer
+```
+
+Kontrolle:
+```bash
+journalctl -u convmv-nfc.service -n 30 --no-pager
+systemctl list-timers convmv-nfc.timer
+```
+
+**Empfehlung fürs Installationsskript:**
+- Den `convmv`-Timer (Skript + Service + Timer) optional als Bestandteil der
+  Server-Installation anbieten, wenn der Server Medien-Uploads über einen Mac-Zwischenschritt
+  erhält.
+- Langfristig/alternativ: Wo möglich den Mac-Umweg beim Sync vermeiden und stattdessen direkt
+  zwischen den Ubuntu-Systemen syncen (z.B. `rsync -av -e ssh`) — dabei tritt das Problem gar
+  nicht erst auf, da kein macOS-System beteiligt ist, das normalisieren könnte.
+
 ## Referenzen
 
 - [Lizmap Dokumentation](https://docs.lizmap.com/)
