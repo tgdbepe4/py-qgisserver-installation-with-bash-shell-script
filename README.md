@@ -428,7 +428,7 @@ QGIS Server ist CPU-intensiv. Zu schwache Hardware führt zu langen Ladezeiten u
 
 > **Tipp:** Passmark-Werte für eigene Hardware: [cpubenchmark.net](https://www.cpubenchmark.net/)
 
-### Bilder mit Umlauten im Dateinamen werden von Lizmap/QGIS Server nicht gefunden (404)
+## Anhang: Umlaute im Dateinamen (NFD/NFC) nach Mac-Synchronisation
 
 **Symptom:** Nach dem Synchronisieren von Medien-/Upload-Verzeichnissen zwischen zwei
 Ubuntu-Systemen über einen Mac als Zwischenstation (z.B. via ForkLift: Ubuntu → Mac → Ubuntu)

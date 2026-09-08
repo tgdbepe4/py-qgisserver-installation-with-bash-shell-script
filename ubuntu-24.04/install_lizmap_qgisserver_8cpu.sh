@@ -1550,8 +1550,8 @@ else
 fi
 
 # ---- convmv NFD->NFC timer (optional) ----------------------------------------
-# See README.md "Bekannte Probleme und Lösungen" -> Umlaute in Dateinamen nach
-# Mac-Synchronisation. Only relevant if media files reach this server via a Mac.
+# See README.md "Anhang: Umlaute im Dateinamen (NFD/NFC) nach Mac-Synchronisation".
+# Only relevant if media files reach this server via a Mac.
 if [[ "${INSTALL_CONVMV_TIMER}" == "true" ]]; then
     section "13. convmv NFD->NFC Timer (Umlaute nach Mac-Sync)"
 
