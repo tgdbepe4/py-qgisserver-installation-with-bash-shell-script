@@ -971,6 +971,108 @@ sudo rm /etc/ssh/ssh_host_* && sudo ssh-keygen -A
 sudo rm /etc/machine-id && sudo systemd-machine-id-setup
 ```
 
+## Anhang: Benutzer, Gruppen und Berechtigungen (`/srv/data`)
+
+Wer darf woran schreiben, und wie stellt man das nach einer Abweichung wieder her — insbesondere
+für einen zusätzlichen persönlichen Admin-Account neben dem automatisch angelegten RDP-Benutzer.
+
+### 1. Beteiligte Benutzer und Gruppen
+
+| Wer | Typ | Rolle |
+|---|---|---|
+| `root` | Systembenutzer | Führt das Installationsskript aus; die systemd-Units (`qgis.service`, Worker) laufen als root |
+| `qgis` | Systemdienst-Benutzer (`useradd --system --home /srv/qgis --shell /bin/false qgis`) | Besitzt `/srv/qgis` und `/srv/data` (`chown -R qgis:qgis`) — kein Login möglich |
+| `www-data` | Systembenutzer (Nginx/PHP-FPM) | Besitzt die Lizmap-Webanwendung selbst (`/var/www/lizmap/...`), über `LIZMAP_USER`/`LIZMAP_GROUP` |
+| `RDP_USER`/`XRDP_USER` (Standard: `gisadmin`) | Normaler Login-Benutzer | Für RDP/QGIS-Desktop-Sitzungen, ist Mitglied der Gruppen `sudo` **und** `qgis` |
+| Weitere persönliche Accounts (z.B. ein eigener SSH-Admin-User) | Normaler Login-Benutzer | **Wird vom Skript nicht automatisch zur Gruppe `qgis` hinzugefügt** |
+
+### 2. Die Gruppe `qgis` als Zugriffsmechanismus
+
+Das Installationsskript macht für `RDP_USER` genau eines:
+
+```bash
+usermod -aG qgis "${RDP_USER}"
+```
+
+`RDP_USER` bleibt Eigentümer seines eigenen Home-Verzeichnisses, wird aber zusätzlich
+**Mitglied** der Gruppe `qgis` (sekundäre Gruppe, nicht primäre). Dadurch kann er in `/srv/data`
+lesen/schreiben, ohne dass die Dateien ihm persönlich gehören müssen — sie bleiben `qgis:qgis`,
+die Gruppenmitgliedschaft reicht für den Zugriff.
+
+**Für weitere persönliche Accounts gilt das nicht automatisch.** Soll z.B. ein eigener
+SSH-Admin-User direkt (ohne RDP-Umweg, etwa per SFTP/rsync) Dateien in `/srv/data` bearbeiten
+können, muss er manuell hinzugefügt werden:
+
+```bash
+sudo usermod -aG qgis <dein-benutzername>
+```
+
+Danach neu einloggen (oder `newgrp qgis` in der aktuellen Session), damit die neue
+Gruppenmitgliedschaft wirksam wird.
+
+### 3. `/srv/data` als Vererbungsordner (SetGID)
+
+Das Skript setzt für `QGIS_PROJECTS_DIR` (`/srv/data`) genau drei Dinge:
+
+```bash
+chown -R qgis:qgis "${QGIS_PROJECTS_DIR}"   # Eigentümer: User+Gruppe qgis
+chmod -R g+rw "${QGIS_PROJECTS_DIR}"        # Gruppe darf lesen+schreiben
+chmod g+s "${QGIS_PROJECTS_DIR}"            # SetGID-Bit
+```
+
+Das **SetGID-Bit** (`g+s`) auf einem Verzeichnis bedeutet: Jede **neue** Datei oder jeder neue
+Unterordner, der darin angelegt wird, erbt automatisch die Gruppe `qgis` — unabhängig davon,
+welcher Benutzer sie erstellt hat (solange dieser Mitglied der Gruppe `qgis` ist). Ohne SetGID
+würde eine neu hochgeladene Datei die primäre Gruppe des hochladenden Benutzers bekommen statt
+`qgis` — und wäre dann für den `qgis`-Systemdienst u.U. nicht mehr lesbar.
+
+SetGID vererbt dabei nur die **Gruppen-Zugehörigkeit**, nicht automatisch die Schreibrechte
+(`g+rw`) selbst — die hängen vom `umask` des erstellenden Prozesses ab.
+
+> **Wichtig:** Diese Behandlung (SetGID + `g+rw`) gilt nur für `/srv/data`, **nicht** für
+> `/srv/qgis` insgesamt (dort steht nur `chown -R qgis:qgis`, ohne SetGID) — `/srv/qgis` enthält
+> die Server-Konfiguration/den Cache, primär verwaltet vom `qgis`-Dienst selbst, nicht
+> kollaborativ von mehreren Menschen bearbeitet.
+
+Ausserdem setzt das Skript `chmod g+s` nur **einmalig auf `/srv/data` selbst**, nicht rekursiv
+auf jeden bereits vorhandenen Unterordner. Neue Unterordner, die *danach* per `mkdir` innerhalb
+von `/srv/data` entstehen, erben das SetGID-Bit automatisch (POSIX-Standardverhalten) — aber
+Ordner/Dateien, die per `scp`/`rsync`/`cp` von aussen hineinkopiert werden, bringen meist keine
+SetGID-Vererbung mit und landen oft mit dem Umask des kopierenden Prozesses.
+
+### 4. Korrekte Ziel-Rechte
+
+| | Owner | Gruppe | Andere | Oktal |
+|---|---|---|---|---|
+| Dateien (`.qgs`, `.qgz`, etc.) | rw | rw | r | `664` |
+| Ordner (inkl. SetGID) | rwx | rwxs | r-x | `2775` |
+
+`600` (nur Owner, kein Gruppenzugriff) wäre **falsch** — das würde die Gruppen-Berechtigung
+komplett blockieren und die Zusammenarbeit über die Gruppe `qgis` zunichtemachen.
+`check_installation.sh`/`check_installation_26.04.sh` prüft aktuell nur den **Eigentümer** von
+`/srv/data` (nicht den numerischen Modus) — es gibt also keine im Skript verankerte Kontrolle
+dafür, dass Dateien tatsächlich `664`/`2775` haben.
+
+### 5. Diagnose
+
+```bash
+# Owner/Gruppe der obersten Ebene
+ls -la /srv/data
+
+# Alle abweichenden Dateien/Ordner rekursiv finden
+find /srv/data -not -group qgis                    # falsche Gruppe
+find /srv/data -type f -not -perm -660              # Dateien ohne Gruppen-rw
+find /srv/data -type d -not -perm -2770             # Ordner ohne SetGID/Gruppen-rwx
+```
+
+### 6. Reparatur
+
+```bash
+sudo chown -R qgis:qgis /srv/data
+sudo find /srv/data -type d -exec chmod 2775 {} \;
+sudo find /srv/data -type f -exec chmod 664 {} \;
+```
+
 ## Referenzen
 
 - [Lizmap Dokumentation](https://docs.lizmap.com/)
