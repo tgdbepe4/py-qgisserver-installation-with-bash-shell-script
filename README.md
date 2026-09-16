@@ -1073,6 +1073,85 @@ sudo find /srv/data -type d -exec chmod 2775 {} \;
 sudo find /srv/data -type f -exec chmod 664 {} \;
 ```
 
+## Anhang: Betrieb hinter einem Reverse Proxy (z.B. Synology NAS)
+
+Läuft der Server nicht direkt am Internet, sondern über einen vorgeschalteten Reverse Proxy
+(z.B. eine Synology-NAS mit DSM-Reverse-Proxy, wie in mehreren produktiven Setups dieses Projekts
+der Fall), ergeben sich zwei Stolperfallen, die mit der Standard-Fehlersuche (DNS, Firewall,
+lokaler `curl`) nicht zu finden sind, weil auf dem Server selbst alles unauffällig aussieht.
+
+### 1. `certbot --nginx` schlägt mit 404 auf die ACME-Challenge fehl
+
+**Symptom:** `sudo certbot --nginx -d <domain>` bricht ab mit:
+```
+Invalid response from http://<domain>/.well-known/acme-challenge/...: 404
+```
+— obwohl DNS korrekt auf die öffentliche IP zeigt, `curl -I http://localhost/` auf dem Server
+selbst `200 OK` liefert, nginx auf Port 80 lauscht und in der UFW-Firewall 80/443 erlaubt sind.
+Im nginx-Access-Log (`/var/log/nginx/lizmap-access.log`) taucht die Challenge-Anfrage dabei
+**gar nicht** auf.
+
+**Ursache:** Ein vorgeschalteter Reverse Proxy (Synology DSM o.ä.) leitet für diese Domain oft
+**nur** HTTPS/443 an den Server weiter, nicht aber Klartext-HTTP/80. Let's Encrypts HTTP-01-
+Challenge läuft aber immer unverschlüsselt über Port 80 — die Anfrage landet beim Reverse Proxy,
+findet dort keine passende Weiterleitungsregel und wird dort bereits mit 404 beantwortet, bevor
+sie den eigentlichen Server überhaupt erreicht. Deshalb fehlt auch der Log-Eintrag.
+
+**Lösung — zwei Möglichkeiten:**
+
+- **Empfohlen:** Zertifikat direkt am Reverse Proxy beziehen (z.B. Synology DSM: Systemsteuerung →
+  Sicherheit → Zertifikat → Von Let's Encrypt abrufen), da dieser Port 80 selbst kontrolliert und
+  die Challenge somit lösen kann. `certbot` auf dem eigentlichen Server wird dann gar nicht mehr
+  gebraucht; das selbstsignierte Zertifikat aus der Installation bleibt nur für den seltenen
+  direkten IP-Zugriff im LAN bestehen.
+- **Alternativ:** Am Reverse Proxy zusätzlich zur bestehenden HTTPS/443-Regel eine zweite Regel
+  für HTTP/80 → `<Ziel-IP>:80` anlegen, damit die ACME-Challenge durchgereicht wird und
+  `certbot --nginx` auf dem Server wie vorgesehen funktioniert.
+
+### 2. Lizmap/PHP erkennt HTTPS nicht — generiert falsche oder ungültige Links
+
+**Symptom:** Ein von Lizmap generierter Link (z.B. `getMedia` für ein PDF-Dokument im Popup)
+verweist auf `http://` statt `https://`, obwohl die Seite selbst über HTTPS aufgerufen wurde —
+oder, nach einem ersten Fixversuch, auf die ungültige Kombination `https://<domain>:80/...`
+(TLS-Schema mit Klartext-Port), die der Browser mit „keine sichere Verbindung" ablehnt.
+
+**Ursache:** Der Reverse Proxy terminiert TLS extern und leitet intern nur Klartext-HTTP an
+nginx/PHP-FPM weiter. PHP weiss dadurch nichts von der ursprünglich verschlüsselten Verbindung —
+`$_SERVER['HTTPS']` ist leer und `$_SERVER['SERVER_PORT']` zeigt den tatsächlichen internen
+nginx-Port (80). Lizmap (Jelix) baut darauf aufbauend alle selbst-referenzierenden URLs falsch.
+
+**Lösung:** Im `http {}`-Block von `/etc/nginx/nginx.conf` zwei `map`-Direktiven ergänzen, die den
+von einem Reverse Proxy gesetzten `X-Forwarded-Proto`-Header auswerten:
+
+```nginx
+map $http_x_forwarded_proto $fastcgi_https_param {
+    default '';
+    https   'on';
+}
+
+map $http_x_forwarded_proto $fastcgi_server_port {
+    default   80;
+    https     443;
+}
+```
+
+Und im PHP-`location`-Block (in `lizmap-common.conf` bzw. wo `fastcgi_pass` für PHP konfiguriert
+ist) ergänzen:
+
+```nginx
+fastcgi_param HTTPS $fastcgi_https_param if_not_empty;
+fastcgi_param SERVER_PORT $fastcgi_server_port;
+```
+
+Danach `sudo nginx -t && sudo systemctl reload nginx`. Beide `fastcgi_param`-Zeilen sind nötig —
+nur `HTTPS` zu setzen führt zur oben beschriebenen ungültigen `https://…:80`-Kombination, da
+Jelix den Port anhängt, sobald er vom für das Schema erwarteten Standard-Port (443 bei HTTPS)
+abweicht.
+
+> Voraussetzung: Der Reverse Proxy muss den Header `X-Forwarded-Proto: https` tatsächlich setzen.
+> Bei Synology DSM ist das nicht in jeder Version automatisch der Fall — ggf. in der
+> Reverse-Proxy-Regel unter „Bearbeiten" → Reiter „Benutzerdefinierter Header" manuell ergänzen.
+
 ## Referenzen
 
 - [Lizmap Dokumentation](https://docs.lizmap.com/)

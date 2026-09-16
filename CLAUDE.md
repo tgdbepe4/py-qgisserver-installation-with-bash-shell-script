@@ -486,6 +486,14 @@ certbot --nginx -d karte1.wandelderzeit.ch
 Da Block 1 (`default_server`) von certbot nicht angefasst wird, ist kein zusätzlicher
 Fix für den IP-Zugriff nötig. `http://<IP>/` bleibt nach certbot weiterhin erreichbar.
 
+> **Server hinter einem Reverse Proxy (z.B. Synology NAS):** `certbot --nginx` schlägt dort meist
+> mit einem 404 auf die ACME-Challenge fehl, obwohl DNS/Firewall/nginx lokal einwandfrei aussehen —
+> der Reverse Proxy leitet oft nur HTTPS/443 weiter, nicht Klartext-HTTP/80, auf dem die Challenge
+> läuft. Ausserdem generiert Lizmap in diesem Setup ohne weiteren Fix falsche (`http://`) oder
+> ungültige (`https://…:80`) Links. Siehe
+> [README.md: Anhang – Betrieb hinter einem Reverse Proxy](README.md#anhang-betrieb-hinter-einem-reverse-proxy-zb-synology-nas)
+> für Ursache und Lösung beider Probleme.
+
 ---
 
 ## xRDP: weitere Benutzer anlegen
