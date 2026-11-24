@@ -830,10 +830,10 @@ if [ -n "${PLUGIN_MGR_BIN}" ]; then
     OK "qgis-plugin-manager installiert${PLUGIN_MGR_VER:+ (v${PLUGIN_MGR_VER})}: ${PLUGIN_MGR_BIN}"
 else
     fail "qgis-plugin-manager nicht gefunden (weder /usr/local/bin noch ${PLUGIN_MGR_VENV}/bin)"
-    INFO "  → python3 -m venv ${PLUGIN_MGR_VENV} && ${PLUGIN_MGR_VENV}/bin/pip install qgis-plugin-manager"
+    INFO "  → python3 -m venv ${PLUGIN_MGR_VENV} --system-site-packages && ${PLUGIN_MGR_VENV}/bin/pip install qgis-plugin-manager"
     if $FIX_MODE; then
         FIX "Installiere qgis-plugin-manager in eigener venv ..."
-        python3 -m venv "${PLUGIN_MGR_VENV}" 2>/dev/null
+        python3 -m venv "${PLUGIN_MGR_VENV}" --system-site-packages 2>/dev/null
         if "${PLUGIN_MGR_VENV}/bin/pip" install -q qgis-plugin-manager; then
             ln -sf "${PLUGIN_MGR_VENV}/bin/qgis-plugin-manager" /usr/local/bin/qgis-plugin-manager
             PLUGIN_MGR_BIN="/usr/local/bin/qgis-plugin-manager"
@@ -841,6 +841,33 @@ else
         else
             warn "Installation fehlgeschlagen"
         fi
+    fi
+fi
+
+# venv sieht die System-Pakete (python3-qgis)? Ohne --system-site-packages kann
+# qgis-plugin-manager die QGIS-Version nicht ermitteln ("Cannot check QGIS version")
+# und prüft bei install/upgrade die Plugin-Kompatibilität nicht.
+PLUGIN_MGR_CFG="${PLUGIN_MGR_VENV}/pyvenv.cfg"
+if [ -f "${PLUGIN_MGR_CFG}" ]; then
+    if "${PLUGIN_MGR_VENV}/bin/python3" -c "from qgis.core import Qgis" &>/dev/null; then
+        OK "qgis-plugin-manager venv: QGIS-Python-Bindings erreichbar"
+    elif grep -qE '^include-system-site-packages\s*=\s*false' "${PLUGIN_MGR_CFG}"; then
+        fail "qgis-plugin-manager venv ohne Zugriff auf System-Pakete (include-system-site-packages = false)"
+        INFO "  → sed -i 's/^include-system-site-packages = false/include-system-site-packages = true/' ${PLUGIN_MGR_CFG}"
+        if $FIX_MODE; then
+            FIX "Aktiviere include-system-site-packages in ${PLUGIN_MGR_CFG} ..."
+            sed -i 's/^include-system-site-packages\s*=\s*false/include-system-site-packages = true/' "${PLUGIN_MGR_CFG}"
+            if "${PLUGIN_MGR_VENV}/bin/python3" -c "from qgis.core import Qgis" &>/dev/null; then
+                OK "qgis-plugin-manager venv: QGIS-Python-Bindings jetzt erreichbar"
+            else
+                warn "QGIS-Python-Bindings weiterhin nicht erreichbar — python3-qgis installiert? Python-Version der venv passt?"
+            fi
+        fi
+    else
+        warn "qgis-plugin-manager venv: QGIS-Python-Bindings nicht erreichbar — python3-qgis installiert?"
+    fi
+    if grep -qsE '^\s*export\s+QGIS_PLUGIN_MANAGER_QGIS_VERSION=' /root/.bashrc /root/.profile /etc/environment 2>/dev/null; then
+        warn "QGIS_PLUGIN_MANAGER_QGIS_VERSION fest gesetzt (/root/.bashrc o.ä.) — überschreibt die echte QGIS-Version, nach Fix entfernen"
     fi
 fi
 

@@ -410,7 +410,11 @@ fi
 
 # qgis-plugin-manager in eigene isolierte venv installieren (PEP 668 -- system-managed Python, gilt auch unter 26.04).
 # Eigene venv verhindert Dependency-Konflikte mit py-qgis-server.
-python3 -m venv /opt/local/qgis-plugin-manager
+# --system-site-packages: qgis-plugin-manager liest die QGIS-Version via "from qgis.core import Qgis"
+# (Paket python3-qgis). Ohne Zugriff auf die System-Pakete erscheint "Cannot check QGIS version"
+# und die Plugin-Kompatibilitaet wird bei install/upgrade nicht geprueft. Eigene venv bleibt
+# bestehen (eigene pip-Pakete haben Vorrang), Re-Run stellt bestehende venvs ebenfalls um.
+python3 -m venv /opt/local/qgis-plugin-manager --system-site-packages
 if /opt/local/qgis-plugin-manager/bin/pip install -q qgis-plugin-manager; then
     ln -sf /opt/local/qgis-plugin-manager/bin/qgis-plugin-manager \
            /usr/local/bin/qgis-plugin-manager

@@ -125,8 +125,22 @@ Installation: primär via **qgis-plugin-manager** (3liz CLI), ZIP-Download als F
 1. Primär: `qgis-plugin-manager` (CLI) — wird vom Installskript in eigener venv bereitgestellt
 2. Fallback: direkter ZIP-Download von GitHub Releases bzw. GitHub master
 
-`qgis-plugin-manager` läuft in einer **eigenen isolierten venv** (`/opt/local/qgis-plugin-manager`),
-getrennt von py-qgis-server, um Dependency-Konflikte zu vermeiden.
+`qgis-plugin-manager` läuft in einer **eigenen venv** (`/opt/local/qgis-plugin-manager`),
+getrennt von py-qgis-server, um Dependency-Konflikte zu vermeiden. Die venv wird mit
+`--system-site-packages` angelegt: qgis-plugin-manager ermittelt die QGIS-Version über
+`from qgis.core import Qgis` (Paket `python3-qgis`). Ohne Zugriff auf die System-Pakete meldet es
+`Cannot check QGIS version` und prüft bei `install`/`upgrade` die Plugin-Kompatibilität nicht.
+Pakete, die in der venv selbst installiert sind, haben weiterhin Vorrang.
+
+Bestehende Installation mit dieser Warnung umstellen (statt `QGIS_PLUGIN_MANAGER_QGIS_VERSION`
+fest zu setzen, das bei QGIS-Updates veraltet):
+```bash
+sed -i 's/^include-system-site-packages = false/include-system-site-packages = true/' \
+    /opt/local/qgis-plugin-manager/pyvenv.cfg
+/opt/local/qgis-plugin-manager/bin/python3 -c "from qgis.core import Qgis; print(Qgis.QGIS_VERSION)"
+```
+`check_installation_26.04.sh --fix` erkennt und korrigiert das ebenfalls.
+
 Symlink: `/usr/local/bin/qgis-plugin-manager`
 
 Plugins manuell aktualisieren (auf bestehendem System):
@@ -400,7 +414,7 @@ im Projekt-Root.
 
 /opt/local/
 ├── py-qgis-server/          # Python venv: py-qgis-server (mit --system-site-packages)
-└── qgis-plugin-manager/     # Python venv: qgis-plugin-manager (isoliert, kein Konflikt)
+└── qgis-plugin-manager/     # Python venv: qgis-plugin-manager (eigene venv, mit --system-site-packages)
 
 /usr/local/bin/
 ├── qgisserver               # Symlink → /opt/local/py-qgis-server/bin/qgisserver
